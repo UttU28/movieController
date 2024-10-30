@@ -108,7 +108,7 @@ async def button_action(request: Request):
     
     if action in action_map:
             action_map[action]()
-    print(f"Received action request: {data}")
+    # print(f"Received action request: {data}")
     return {"status": "success", "message": f"Action '{action}' executed"}
 
 @app.post("/search")
@@ -134,6 +134,6 @@ async def search_query(request: Request):
     }
 
 if __name__ == "__main__":
-    thisChromeDriver = prepareChromeAndSelenium(isChromeRunning())
+    # thisChromeDriver = prepareChromeAndSelenium(isChromeRunning())
     import uvicorn
     uvicorn.run("app:app", host="0.0.0.0", port=5000, reload=True)

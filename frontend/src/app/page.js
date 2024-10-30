@@ -1,8 +1,8 @@
-// app/page.js
 "use client";
 
 import React from 'react';
-import { Container, Typography } from "@mui/material";
+import { useRouter } from 'next/navigation'; // Import useRouter for navigation
+import { Container, Typography, Button } from "@mui/material";
 import AppTray from "../components/AppTray";
 import HomeFunctions from "../containers/HomeFunctions";
 import HotKeys from "../containers/HotKeys";
@@ -17,7 +17,13 @@ import TrackPad from "../containers/trackPad/TrackPad";
 import SearchBar from "../components/SearchBar";
 
 export default function Home() {
+    const router = useRouter(); // Initialize useRouter
     const { visibleContentID } = useAppState(); // Get visible content from context
+
+    // Function to navigate to /watch
+    const goToWatch = () => {
+        router.push('/watch'); // Redirect to /watch
+    };
 
     return (
         <Container>
@@ -38,6 +44,16 @@ export default function Home() {
 
             <TrackPad />
             <SearchBar visibleContentId={visibleContentID} />
+
+            {/* Add Button to redirect to /watch */}
+            <Button 
+                variant="contained" 
+                color="primary" 
+                onClick={goToWatch}
+                sx={{ marginTop: 2, marginBottom: 5}}
+            >
+                Go to Watch
+            </Button>
         </Container>
     );
 }

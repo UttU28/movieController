@@ -15,7 +15,7 @@ export default function HomeFunctions() {
       { name: "nextTrack", icon: faForward, alias: "NEXT" }
     ],
     [
-      { name: "volumeDecrease", icon: faMinus, alias: "VOL" }
+      { name: "volumeDecrease", icon: faMinus, alias: "VOL" },
     ]
   ];
 
