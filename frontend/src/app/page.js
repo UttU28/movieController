@@ -1,28 +1,61 @@
 "use client";
 
-import React from 'react';
-import { useRouter } from 'next/navigation'; // Import useRouter for navigation
-import { Container, Typography, Button } from "@mui/material";
-import AppTray from "../components/AppTray";
-import HomeFunctions from "../containers/HomeFunctions";
-import HotKeys from "../containers/HotKeys";
-import YouTube from "../containers/appFunctions/YouTube";
-import AmazonPrime from "../containers/appFunctions/AmazonPrime";
-import IBomma from "../containers/appFunctions/IBomma";
-import Netflix from "../containers/appFunctions/Netflix";
-import FMovies from "../containers/appFunctions/FMovies";
-import GoogleChrome from "../containers/appFunctions/GoogleChrome";
-import { useAppState } from '../context/AppStateContext'; // Import context
-import TrackPad from "../containers/trackPad/TrackPad";
-import SearchBar from "../components/SearchBar";
+import React, { useState, useEffect } from 'react';
+import { Container, Typography, TextField, Button } from "@mui/material";
+import ButtonGroup from "../components/ButtonGroup";
+import TextGroup from "../components/TextGroup"; // Import TextGroup
+import getButtonData from "../components/buttonData";
 
 export default function Home() {
-    const router = useRouter(); // Initialize useRouter
-    const { visibleContentID } = useAppState(); // Get visible content from context
+    const [searchTerm, setSearchTerm] = useState("");
+    const [errorMessage, setErrorMessage] = useState(""); 
+    const [responseObject, setResponseObject] = useState(null); 
+    const [defaultItem, setDefaultItem] = useState(null); 
 
-    // Function to navigate to /watch
-    const goToWatch = () => {
-        router.push('/watch'); // Redirect to /watch
+// Unified function to send commands
+const sendCommand = async (command, query = "") => {
+    try {
+        const isGetRequest = command === "current";
+        const url = query
+            ? `http://192.168.208.1:5000/${command}?query=${encodeURIComponent(query)}`
+            : `http://192.168.208.1:5000/${command}`;
+        const response = await fetch(url, {
+            method: isGetRequest ? "GET" : "POST",
+        });
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        const data = await response.json();
+        setResponseObject(data);
+        setErrorMessage("");
+    } catch (error) {
+        setErrorMessage(`Error sending ${command} command: ${error.message}`);
+        setResponseObject(null);
+    }
+};
+
+    const fetchDefaultItem = async () => {
+        try {
+            const response = await fetch("http://192.168.208.1:5000/get_default", {
+                method: "POST",
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            const data = await response.json();
+            setDefaultItem(data); 
+        } catch (error) {
+            setErrorMessage(`Error fetching default item: ${error.message}`);
+        }
+    };
+
+    useEffect(() => {
+        fetchDefaultItem();
+    }, []);
+
+    // Function to handle search button click
+    const handleSearch = () => {
+        sendCommand("search", searchTerm);
     };
 
     return (
@@ -30,30 +63,41 @@ export default function Home() {
             <Typography variant="h5" component="h5" gutterBottom>
                 APNE BAAP KA CONTROLLER 2.0
             </Typography>
-            <HomeFunctions />
-            <HotKeys />
-            {!visibleContentID && <AppTray />}
 
-            {/* Render selected content */}
-            {visibleContentID === "youTube" && <YouTube />}
-            {visibleContentID === "fMovies" && <FMovies />}
-            {visibleContentID === "iBomma" && <IBomma />}
-            {visibleContentID === "googleChrome" && <GoogleChrome />}
-            {visibleContentID === "primeVideos" && <AmazonPrime />}
-            {visibleContentID === "netflix" && <Netflix />}
+            {errorMessage && <Typography color="error">{errorMessage}</Typography>}
 
-            <TrackPad />
-            <SearchBar visibleContentId={visibleContentID} />
 
-            {/* Add Button to redirect to /watch */}
-            <Button 
-                variant="contained" 
-                color="primary" 
-                onClick={goToWatch}
-                sx={{ marginTop: 2, marginBottom: 5}}
-            >
-                Go to Watch
-            </Button>
+            {/* Render ButtonGroup with JSON button data */}
+            <ButtonGroup buttonData={getButtonData(sendCommand)} whatContainer="youtubeControls" />
+            {defaultItem && (
+                <TextGroup 
+                    textData={defaultItem} 
+                    whatContainer="defaultItemContainer" 
+                    iconColor="blue" 
+                />
+            )}
+
+            {responseObject && (
+                <TextGroup 
+                    textData={responseObject} 
+                    whatContainer="responseObjectContainer" 
+                    iconColor="green" 
+                />
+            )}
+
+            {/* Search Input and Button */}
+            <div style={{ marginTop: '20px', display: 'flex', alignItems: 'center' }}>
+                <TextField 
+                    label="Search" 
+                    variant="outlined" 
+                    value={searchTerm} 
+                    onChange={(e) => setSearchTerm(e.target.value)} 
+                    sx={{ marginRight: 1 }}
+                />
+                <Button variant="contained" color="primary" onClick={handleSearch}>
+                    Execute Search
+                </Button>
+            </div>
         </Container>
     );
 }

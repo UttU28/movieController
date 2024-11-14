@@ -1,5 +1,6 @@
 // components/ButtonGroup.js
 import { Grid, Box, Container } from '@mui/material';
+import { Button, Typography } from '@mui/material';
 import NormalButton from "./NormalButton";
 
 const ButtonGroup = ({ buttonData, whatContainer }) => {
@@ -14,7 +15,9 @@ const ButtonGroup = ({ buttonData, whatContainer }) => {
                   <NormalButton 
                     buttonName={button.name} 
                     icon={button.icon} 
-                    alias={button.alias} // Pass the alias
+                    alias={button.alias} 
+                    // Pass `whatToDoOnClick` only if `functionToCall` exists
+                    {...(button.functionToCall && { whatToDoOnClick: button.functionToCall })}
                   />
                 </Box>
               ))}
