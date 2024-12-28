@@ -138,7 +138,7 @@ def goToYouTubeHome():
 @app.get("/current")
 def getCurrentVideo():
     title, link, channelName = getFocusedContent()
-    if title and link:
+    if title and ("/watch?v=" in link):
         fullUrl = f"https://www.youtube.com{link}" if link.startswith("/") else link
         thisDriver.get(fullUrl)
         loadYouTubeContent(resetIndex=True)
@@ -197,8 +197,8 @@ def pressButton(key: str = Query(...)):
 def reloadPage():
     try:
         currentUrl = thisDriver.current_url
-        thisDriver.get(currentUrl)  # Re-navigate to the current URL to reload
-        loadYouTubeContent()  
+        thisDriver.get(currentUrl)
+        loadYouTubeContent(resetIndex=True)  
         title, link, channelName = getFocusedContent()
         return {"message": "Page reloaded", "title": title, "link": f"https://www.youtube.com{link}", "channel": channelName}
     except Exception as e:

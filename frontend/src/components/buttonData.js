@@ -1,13 +1,67 @@
 // buttonData.js
-import { faArrowLeft, faArrowRight, faCirclePlay, faExpand, faInfo, faPlay, faPowerOff, faRotateRight } from "@fortawesome/free-solid-svg-icons";
+import { faArrowLeft, faArrowRight, faCirclePlay, faExpand, faInfo, faPlay, faPlus, faPowerOff, faBackward, faRotateLeft, faPause, faRotateRight, faForward, faMinus } from "@fortawesome/free-solid-svg-icons";
 
 const getButtonData = (sendCommand) => [
     [
+    ],
+    [
+        {
+            name: "newTab",
+            icon: faPlus,
+            alias: "+ TAB",
+            functionToCall: () => sendCommand("previous"),
+        },
+        {
+            name: "volumeIncrease",
+            icon: faPlus,
+            alias: "VOL",
+            functionToCall: () => sendCommand("previous"),
+        },
         {
             name: "on",
             icon: faPowerOff,
             alias: "On/Off",
             functionToCall: () => sendCommand("on"),
+        },
+    ],
+    [
+        {
+            name: "reload",
+            icon: faRotateRight,
+            alias: "RLoD",
+            functionToCall: () => sendCommand("reload"),
+        },
+        {
+            name: "backSeek",
+            icon: faRotateLeft,
+            alias: "SEEK",
+            functionToCall: () => sendCommand("pressButton?key=j"),
+        },
+        {
+            name: "playPause",
+            icon: faPause,
+            alias: "PL/USE",
+            functionToCall: () => sendCommand("pressButton?key=k"),
+        },
+        {
+            name: "forwardSeek",
+            icon: faRotateRight,
+            alias: "SEEK",
+            functionToCall: () => sendCommand("pressButton?key=l"),
+        },
+        {
+            name: "fullscreen",
+            icon: faExpand,
+            alias: "FlScrn",
+            functionToCall: () => sendCommand("pressButton?key=f"),
+        },
+    ],
+    [
+        {
+            name: "volumeDecrease",
+            icon: faMinus,
+            alias: "VOL",
+            functionToCall: () => sendCommand("previous"),
         },
     ],
     [
@@ -20,7 +74,7 @@ const getButtonData = (sendCommand) => [
         {
             name: "current",
             icon: faCirclePlay,
-            alias: "Play",
+            alias: "PLAY",
             functionToCall: () => sendCommand("current"),
         },
         {
@@ -29,31 +83,11 @@ const getButtonData = (sendCommand) => [
             alias: "Next",
             functionToCall: () => sendCommand("next"),
         },
-    ],
-    [
-        {
-            name: "fullscreen",
-            icon: faExpand,
-            alias: "FLSCRN",
-            functionToCall: () => sendCommand("pressButton?key=f"),
-        },
-        {
-            name: "playPause",
-            icon: faPlay,
-            alias: "PL/USE",
-            functionToCall: () => sendCommand("pressButton?key=k"),
-        },
         {
             name: "playPause",
             icon: faInfo,
-            alias: "pic-dwn",
+            alias: "i-Btn",
             functionToCall: () => sendCommand("pressButton?key=i"),
-        },
-        {
-            name: "reload",
-            icon: faRotateRight,
-            alias: "pic-dwn",
-            functionToCall: () => sendCommand("reload"),
         },
     ],
 ];

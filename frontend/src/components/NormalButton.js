@@ -1,49 +1,50 @@
-// components/NormalButton.js
 "use client";
 
-import { Button, Typography } from '@mui/material';
+import { motion } from 'framer-motion';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { useAppState } from '../context/AppStateContext'; 
-import { sendButtonAction } from '../context/apiRequests'; 
+import styled from 'styled-components';
 
-export default function NormalButton({ buttonName, icon, alias, iconColor = 'white', whatToDoOnClick }) {
-  const { goBack } = useAppState();
+const NeumorphicButton = styled(motion.button)`
+  width: 60px;
+  height: 60px;
+  border: none;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-around;
+  background: var(--button-bg);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin: 8px;
+  padding: 8px;
 
-  const defaultHandleButtonClick = async () => {
-    try {
-      console.log(buttonName);
-      if (buttonName === 'goBack') {
-        goBack();
-      } else {
-        await sendButtonAction(buttonName);
-      }
-    } catch (error) {
-      console.error('Error:', error);
-    }
-  };
+  &:hover {
+    color: var(--accent);
+  }
 
+  .icon {
+    font-size: 1.3rem;
+    margin-bottom: 3px;
+  }
+
+  .label {
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+`;
+
+export default function NormalButton({ buttonName, icon, alias, whatToDoOnClick }) {
   return (
-    <Button
-      size="small"
-      variant=""
-      onClick={whatToDoOnClick || defaultHandleButtonClick}
-      sx={{
-        width: 50,
-        height: 50,
-        padding: 0,
-        margin: 0,
-        borderRadius: 2,
-        fontWeight: 'bold',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-      }}
+    <NeumorphicButton
+      className="neomorphic-button"
+      onClick={whatToDoOnClick}
+      whileTap={{ scale: 0.95 }}
+      whileHover={{ scale: 1.05 }}
     >
-      <FontAwesomeIcon icon={icon} style={{ color: iconColor, fontSize: '1.25rem' }} />
-      <Typography variant="caption" sx={{ pt: 0.5, color: iconColor, fontWeight: 'bold', fontSize: '0.50rem' }}>
-        {alias}
-      </Typography>
-    </Button>
+      <FontAwesomeIcon icon={icon} className="icon" />
+      <span className="label">{alias}</span>
+    </NeumorphicButton>
   );
 }

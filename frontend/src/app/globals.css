@@ -1,27 +1,13 @@
 :root {
-  --background: #0a0a0a;
+  --background: #1a1b1f;
   --foreground: #ededed;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --accent: #00e5ff;
+  --card-bg: #1e1f24;
+  --button-bg: #1a1b1f;
+  --button-shadow: 8px 8px 16px #151518, -8px -8px 16px #1f2026;
+  --button-inset: inset 8px 8px 16px #151518, inset -8px -8px 16px #1f2026;
+  --text-primary: #ffffff;
+  --text-secondary: #8a8d93;
 }
 
 * {
@@ -30,13 +16,53 @@ body {
   margin: 0;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  background: var(--background);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+.neomorphic-container {
+  background: var(--background);
+  border-radius: 20px;
+  box-shadow: var(--button-shadow);
+  transition: all 0.3s ease;
+}
+
+.neomorphic-button {
+  background: var(--button-bg);
+  border-radius: 12px;
+  box-shadow: var(--button-shadow);
+  transition: all 0.2s ease;
+}
+
+.neomorphic-button:hover {
+  box-shadow: var(--button-inset);
+  transform: scale(0.98);
+}
+
+.neomorphic-input {
+  background: var(--card-bg);
+  border-radius: 12px;
+  box-shadow: var(--button-inset);
+}
+
+.gradient-text {
+  background: linear-gradient(45deg, var(--accent), #80ffea);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.pulse {
+  animation: pulse 2s infinite;
 }
