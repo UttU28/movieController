@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Container, TextField, IconButton, Box } from "@mui/material";
+import { Box } from "@mui/material";
 import SearchIcon from '@mui/icons-material/Search'; 
 import { sendSearchQuery } from '../context/apiRequests'; 
 
@@ -11,67 +11,115 @@ export default function SearchBar({ visibleContentId }) {
 
     const handleSearch = async () => {
         if (searchQuery.trim() === '') return; 
-
         await sendSearchQuery(searchQuery, visibleContentId); 
         setSearchQuery(''); 
     };
 
     useEffect(() => {
-        // Reset search query whenever the visibleContentId changes
         setSearchQuery('');
     }, [visibleContentId]);
 
     return (
-        <Container>
+        <Box 
+            sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                width: '100%',
+                padding: { xs: 1, sm: 2 },
+                marginTop: 1,
+            }}
+        >
             <Box 
                 sx={{ 
                     display: 'flex', 
                     alignItems: 'center', 
-                    width: '90%', 
-                    margin: '0 auto', 
-                    backgroundColor: 'black', 
-                    padding: 1,
-                    borderRadius: 2 
+                    width: '100%',
+                    maxWidth: '500px',
+                    position: 'relative',
                 }}
             >
-                <TextField
-                    id="filled-search"
-                    label="Search field"
-                    type="search"
-                    variant="filled" 
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)} 
-                    InputProps={{
-                        style: { 
-                            color: 'white', 
-                            backgroundColor: 'black', 
-                        },
-                    }}
+                <Box
                     sx={{
                         flex: 1,
-                        height: '40px', 
-                        '& .MuiFilledInput-root': {
-                            borderRadius: 5, 
-                        },
-                    }}
-                />
-                <IconButton 
-                    aria-label="search" 
-                    onClick={handleSearch} 
-                    sx={{ 
-                        width: 40, 
-                        height: 40,
-                        backgroundColor: 'white', 
-                        color: 'black', 
-                        marginLeft: 1, 
-                        '&:hover': {
-                            backgroundColor: 'lightgray', 
+                        position: 'relative',
+                        background: 'linear-gradient(145deg, #1a1a1a, #0f0f0f)',
+                        borderRadius: 'var(--radius-lg)',
+                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        boxShadow: `
+                            6px 6px 12px rgba(0, 0, 0, 0.5),
+                            -6px -6px 12px rgba(255, 255, 255, 0.03)
+                        `,
+                        overflow: 'hidden',
+                        transition: 'all var(--transition-smooth)',
+                        '&:focus-within': {
+                            border: '1px solid var(--accent-primary)',
+                            boxShadow: `
+                                8px 8px 16px rgba(0, 0, 0, 0.6),
+                                -8px -8px 16px rgba(255, 255, 255, 0.04),
+                                0 0 20px rgba(255, 51, 51, 0.2)
+                            `,
                         },
                     }}
                 >
-                    <SearchIcon />
-                </IconButton>
+                    <input
+                        type="text"
+                        placeholder="Search anything..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                        style={{
+                            width: '100%',
+                            padding: '16px 20px',
+                            background: 'transparent',
+                            border: 'none',
+                            outline: 'none',
+                            color: 'var(--text-primary)',
+                            fontSize: '0.9rem',
+                            fontWeight: 500,
+                        }}
+                    />
+                </Box>
+
+                <Box
+                    onClick={handleSearch}
+                    sx={{
+                        width: 48,
+                        height: 48,
+                        marginLeft: 1,
+                        background: 'linear-gradient(145deg, var(--accent-primary), #d6457a)',
+                        borderRadius: 'var(--radius-lg)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        boxShadow: `
+                            6px 6px 12px rgba(0, 0, 0, 0.5),
+                            -6px -6px 12px rgba(255, 255, 255, 0.03)
+                        `,
+                        transition: 'all var(--transition-smooth)',
+                        '&:hover': {
+                            transform: 'translateY(-2px) scale(1.02)',
+                            boxShadow: `
+                                8px 8px 16px rgba(0, 0, 0, 0.6),
+                                -8px -8px 16px rgba(255, 255, 255, 0.04),
+                                0 0 25px rgba(255, 51, 51, 0.3)
+                            `,
+                        },
+                        '&:active': {
+                            transform: 'translateY(0) scale(0.98)',
+                        },
+                    }}
+                >
+                    <SearchIcon 
+                        sx={{ 
+                            color: 'white',
+                            fontSize: '1.2rem',
+                        }} 
+                    />
+                </Box>
             </Box>
-        </Container>
+        </Box>
     );
 }

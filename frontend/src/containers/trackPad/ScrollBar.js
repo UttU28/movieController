@@ -12,13 +12,18 @@ export default function ScrollBar({ onTouchStart, onTouchMove, onTouchEnd }) {
       sx={{
         flex: 0.1,
         height: "25vh",
-        backgroundColor: "#212121",
+        backgroundColor: "#1a1a1a",
         borderRadius: 2,
         touchAction: "none",
         position: "relative",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        border: '1px solid rgba(255, 255, 255, 0.05)',
+        boxShadow: `
+          inset 2px 2px 4px rgba(0, 0, 0, 0.4),
+          inset -2px -2px 4px rgba(255, 255, 255, 0.02)
+        `,
       }}
     >
       <Typography
@@ -28,9 +33,10 @@ export default function ScrollBar({ onTouchStart, onTouchMove, onTouchEnd }) {
           left: "-75%",
           top: "50%",
           transformOrigin: "center",
-          color: "grey",
+          color: "var(--text-muted)",
           whiteSpace: "nowrap",
           fontSize: 10,
+          fontWeight: 500,
         }}
       >
         &lt;-- SCROLL BAR --&gt;

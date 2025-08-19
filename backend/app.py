@@ -21,6 +21,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for connection monitoring"""
+    return {"status": "healthy", "message": "Backend is running"}
+
 @app.post("/move")
 async def move_mouse(request: Request):
     data = await request.json()
