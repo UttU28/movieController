@@ -3,7 +3,7 @@ import React from 'react';
 import { Box, Typography, Fade } from '@mui/material';
 import NormalButton from "./NormalButton";
 
-const ButtonGroup = ({ buttonData, whatContainer, title, variant = 'neuro' }) => {
+const ButtonGroup = ({ buttonData, whatContainer, title, variant = 'neuro', onButtonSelect }) => {
 
   return (
     <Fade in={true} timeout={800}>
@@ -58,6 +58,7 @@ const ButtonGroup = ({ buttonData, whatContainer, title, variant = 'neuro' }) =>
                   iconColor={button.iconColor || 'var(--text-primary)'}
                   variant={button.variant || variant}
                   size={button.size || 'medium'}
+                  onButtonSelect={onButtonSelect}
                 />
               ))}
             </Box>

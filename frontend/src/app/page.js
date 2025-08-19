@@ -138,12 +138,47 @@ export default function Home() {
                     {/* Subtitle and Connection Status Row */}
                     <Box sx={{ 
                         display: 'flex', 
-                        justifyContent: 'end', 
-                        alignItems: 'end',
+                        justifyContent: 'center', 
+                        alignItems: 'center',
                         width: '100%',
-                        px: 1
+                        px: 1,
+                        gap: 3
                     }}>
-                        {/* Connection Status - Right Aligned */}
+                        {/* Watch Page Button */}
+                        <Box
+                            onClick={() => window.location.href = '/watch'}
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 0.5,
+                                cursor: 'pointer',
+                                padding: '4px 8px',
+                                borderRadius: 'var(--radius-sm)',
+                                background: 'rgba(255, 255, 255, 0.05)',
+                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                transition: 'all 0.2s ease',
+                                '&:hover': {
+                                    background: 'rgba(255, 255, 255, 0.1)',
+                                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                                    transform: 'translateY(-1px)',
+                                }
+                            }}
+                        >
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: 'var(--accent-secondary)',
+                                    fontSize: '0.6rem',
+                                    fontWeight: 700,
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.05em',
+                                }}
+                            >
+                                WATCH
+                            </Typography>
+                        </Box>
+
+                        {/* Connection Status */}
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             <Box
                                 sx={{
@@ -177,7 +212,7 @@ export default function Home() {
                             >
                                 {connectionStatus === 'connected' ? 'CONNECTED' : 
                                  connectionStatus === 'checking' ? 'CHECKING' : 'DISCONNECTED'}
-            </Typography>
+                            </Typography>
                             
                             {/* Manual Reconnect Button for Disconnected State */}
                             {connectionStatus === 'disconnected' && (
@@ -199,8 +234,6 @@ export default function Home() {
                                     }}
                                 />
                             )}
-                            
-
                         </Box>
                     </Box>
                 </Box>

@@ -14,7 +14,8 @@ export default function NormalButton({
   iconColor = 'var(--text-primary)', 
   whatToDoOnClick,
   variant = 'neuro',
-  size = 'medium'
+  size = 'medium',
+  onButtonSelect
 }) {
   const { goBack } = useAppState();
   const [isLoading, setIsLoading] = useState(false);
@@ -35,6 +36,11 @@ export default function NormalButton({
     try {
       setIsLoading(true);
       setIsPressed(true);
+      
+      // Call onButtonSelect for testing if provided
+      if (onButtonSelect) {
+        onButtonSelect(buttonName);
+      }
       
       if (rippleRef.current) {
         const ripple = document.createElement('span');
