@@ -10,8 +10,14 @@ from utils.iBommaFunctions import *
 from utils.netflixFunctions import *
 from utils.primeVideosFunctions import *
 from utils.youTubeFunctions import *
+from utils.ipAddressUtils import initializeDeviceIp
 
 app = FastAPI()
+
+# Initialize device IP address at startup
+@app.on_event("startup")
+async def startup_event():
+    initializeDeviceIp()
 
 app.add_middleware(
     CORSMiddleware,

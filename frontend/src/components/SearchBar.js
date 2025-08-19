@@ -46,19 +46,10 @@ export default function SearchBar({ visibleContentId }) {
                         background: 'linear-gradient(145deg, #1a1a1a, #0f0f0f)',
                         borderRadius: 'var(--radius-lg)',
                         border: '1px solid rgba(255, 255, 255, 0.08)',
-                        boxShadow: `
-                            6px 6px 12px rgba(0, 0, 0, 0.5),
-                            -6px -6px 12px rgba(255, 255, 255, 0.03)
-                        `,
                         overflow: 'hidden',
                         transition: 'all var(--transition-smooth)',
                         '&:focus-within': {
                             border: '1px solid var(--accent-primary)',
-                            boxShadow: `
-                                8px 8px 16px rgba(0, 0, 0, 0.6),
-                                -8px -8px 16px rgba(255, 255, 255, 0.04),
-                                0 0 20px rgba(255, 51, 51, 0.2)
-                            `,
                         },
                     }}
                 >
@@ -87,25 +78,18 @@ export default function SearchBar({ visibleContentId }) {
                         width: 48,
                         height: 48,
                         marginLeft: 1,
-                        background: 'linear-gradient(145deg, var(--accent-primary), #d6457a)',
+                        background: 'linear-gradient(145deg, #1a1a1a, #0f0f0f)',
                         borderRadius: 'var(--radius-lg)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         cursor: 'pointer',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                        boxShadow: `
-                            6px 6px 12px rgba(0, 0, 0, 0.5),
-                            -6px -6px 12px rgba(255, 255, 255, 0.03)
-                        `,
+                        border: '1px solid rgba(255, 255, 255, 0.08)',
                         transition: 'all var(--transition-smooth)',
                         '&:hover': {
+                            background: 'linear-gradient(145deg, #2a2a2a, #1a1a1a)',
+                            border: '1px solid rgba(255, 255, 255, 0.12)',
                             transform: 'translateY(-2px) scale(1.02)',
-                            boxShadow: `
-                                8px 8px 16px rgba(0, 0, 0, 0.6),
-                                -8px -8px 16px rgba(255, 255, 255, 0.04),
-                                0 0 25px rgba(255, 51, 51, 0.3)
-                            `,
                         },
                         '&:active': {
                             transform: 'translateY(0) scale(0.98)',
@@ -114,7 +98,7 @@ export default function SearchBar({ visibleContentId }) {
                 >
                     <SearchIcon 
                         sx={{ 
-                            color: 'white',
+                            color: 'var(--accent-primary)',
                             fontSize: '1.2rem',
                         }} 
                     />

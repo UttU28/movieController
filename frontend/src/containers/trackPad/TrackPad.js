@@ -145,10 +145,6 @@ export default function TrackPad() {
               background: 'linear-gradient(145deg, #1a1a1a, #0f0f0f)',
               borderRadius: 'var(--radius-sm)',
               border: '1px solid rgba(255, 255, 255, 0.08)',
-              boxShadow: `
-                inset 0 2px 8px rgba(0, 0, 0, 0.4),
-                0 2px 12px rgba(0, 0, 0, 0.3)
-              `,
               position: 'relative',
               overflow: 'hidden',
             }}
@@ -218,21 +214,12 @@ export default function TrackPad() {
               background: 'linear-gradient(145deg, #1a1a1a, #0f0f0f)',
               borderRadius: 'var(--radius-md)',
               border: '2px solid rgba(255, 255, 255, 0.08)',
-              boxShadow: `
-                inset 0 2px 10px rgba(0, 0, 0, 0.4),
-                0 4px 20px rgba(0, 0, 0, 0.3)
-              `,
               touchAction: "none",
               cursor: 'crosshair',
               transition: 'all var(--transition-smooth)',
               overflow: 'hidden',
               ...(isActive && {
                 border: '2px solid var(--accent-primary)',
-                boxShadow: `
-                  inset 0 2px 10px rgba(0, 0, 0, 0.4),
-                  0 4px 20px rgba(0, 0, 0, 0.3),
-                  0 0 20px rgba(255, 51, 51, 0.25)
-                `,
               }),
             }}
           >
@@ -264,7 +251,6 @@ export default function TrackPad() {
                   borderRadius: '50%',
                   background: 'var(--accent-primary)',
                   transform: 'translate(-50%, -50%)',
-                  boxShadow: '0 0 20px var(--accent-primary)',
                   animation: 'pulse 1s infinite',
                   pointerEvents: 'none',
                   zIndex: 2,
@@ -350,7 +336,6 @@ export default function TrackPad() {
                   width: 12,
                   height: 12,
                   backgroundColor: 'var(--accent-secondary)',
-                  boxShadow: '0 0 8px rgba(243, 156, 18, 0.5)',
                   '&:hover': {
                     boxShadow: '0 0 12px rgba(243, 156, 18, 0.7)',
                   }

@@ -20,10 +20,6 @@ export default function ScrollBar({ onTouchStart, onTouchMove, onTouchEnd }) {
         alignItems: "center",
         justifyContent: "center",
         border: '1px solid rgba(255, 255, 255, 0.05)',
-        boxShadow: `
-          inset 2px 2px 4px rgba(0, 0, 0, 0.4),
-          inset -2px -2px 4px rgba(255, 255, 255, 0.02)
-        `,
       }}
     >
       <Typography

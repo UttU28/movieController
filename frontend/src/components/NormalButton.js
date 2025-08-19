@@ -67,18 +67,10 @@ export default function NormalButton({
     return {
       background: 'linear-gradient(145deg, #1a1a1a, #0f0f0f)',
       border: '1px solid rgba(255, 255, 255, 0.08)',
-      boxShadow: `
-        6px 6px 12px rgba(0, 0, 0, 0.5),
-        -6px -6px 12px rgba(255, 255, 255, 0.03)
-      `,
       '&:hover': {
         background: 'linear-gradient(145deg, #2a2a2a, #1a1a1a)',
         border: '1px solid rgba(255, 255, 255, 0.12)',
         transform: 'translateY(-2px) scale(1.02)',
-        boxShadow: `
-          8px 8px 16px rgba(0, 0, 0, 0.6),
-          -8px -8px 16px rgba(255, 255, 255, 0.04)
-        `,
       }
     };
   };
@@ -112,7 +104,6 @@ export default function NormalButton({
         ...getVariantStyles(),
         ...(isPressed && {
           transform: 'scale(0.95)',
-          boxShadow: 'inset 4px 4px 8px rgba(0, 0, 0, 0.5), inset -4px -4px 8px rgba(255, 255, 255, 0.03)',
         }),
         '&:active': {
           transform: 'scale(0.92)',
