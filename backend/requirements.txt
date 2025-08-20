@@ -2,3 +2,4 @@ fastapi
 fastapi_cors
 pyautogui
 uvicorn
+qrcode[pil]
