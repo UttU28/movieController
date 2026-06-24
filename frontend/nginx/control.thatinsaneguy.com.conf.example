@@ -1,0 +1,38 @@
+# Movie Controller Next.js — HTTPS after Certbot. Re-applied by deploy.sh after first issuance.
+# Backend API stays on http://192.168.0.53:9281 (NEXT_PUBLIC_BACKEND_URL at build time).
+
+server {
+    server_name control.thatinsaneguy.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:__FRONTEND_PORT__;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_buffering off;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+    }
+
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/control.thatinsaneguy.com/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/control.thatinsaneguy.com/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+}
+
+server {
+    if ($host = control.thatinsaneguy.com) {
+        return 301 https://$host$request_uri;
+    }
+
+    server_name control.thatinsaneguy.com;
+    listen 80;
+    return 404;
+}

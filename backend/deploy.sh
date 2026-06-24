@@ -70,7 +70,7 @@ fi
 source_env_file ".env"
 
 HOST="${HOST:-0.0.0.0}"
-PORT="${PORT:-5000}"
+PORT="${PORT:-9281}"
 PM2_NAME="${PM2_NAME:-moviecontroller-backend}"
 
 if ! command -v python3 &>/dev/null; then

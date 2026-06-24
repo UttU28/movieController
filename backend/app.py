@@ -8,7 +8,7 @@ import pyautogui
 load_dotenv()
 
 HOST = os.getenv("HOST", "0.0.0.0")
-PORT = int(os.getenv("PORT", "5000"))
+PORT = int(os.getenv("PORT", "9281"))
 RELOAD = os.getenv("RELOAD", "true").lower() in ("1", "true", "yes")
 CORS_ORIGINS = [
     origin.strip()
