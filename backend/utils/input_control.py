@@ -24,19 +24,32 @@ def _session_env() -> dict[str, str]:
     env = os.environ.copy()
     if not env.get("DISPLAY"):
         env["DISPLAY"] = os.getenv("DISPLAY", ":0")
-    xauth = os.getenv("XAUTHORITY")
-    if xauth:
+
+    xauth = os.getenv("XAUTHORITY", "").strip()
+    if xauth and os.path.isfile(os.path.expanduser(xauth)):
         env["XAUTHORITY"] = os.path.expanduser(xauth)
-    elif not env.get("XAUTHORITY"):
+    elif env.get("XAUTHORITY") and os.path.isfile(os.path.expanduser(env["XAUTHORITY"])):
+        env["XAUTHORITY"] = os.path.expanduser(env["XAUTHORITY"])
+    else:
         home = os.path.expanduser("~")
+        uid = os.getuid()
         for candidate in (
             f"{home}/.Xauthority",
-            f"/run/user/{os.getuid()}/gdm/Xauthority",
-            f"/run/user/{os.getuid()}/Xauthority",
+            f"/run/user/{uid}/gdm/Xauthority",
+            f"/run/user/{uid}/Xauthority",
         ):
             if os.path.isfile(candidate):
                 env["XAUTHORITY"] = candidate
                 break
+        else:
+            import glob
+
+            for candidate in glob.glob(f"/run/user/{uid}/.mutter-Xwaylandauth.*"):
+                if os.path.isfile(candidate):
+                    env["XAUTHORITY"] = candidate
+                    break
+            else:
+                env.pop("XAUTHORITY", None)
     return env
 
 

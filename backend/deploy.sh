@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Movie Controller backend — FastAPI + uvicorn + PM2
 #
-#   ./deploy.sh
-#   ./deploy.sh --skip-pm2    # venv + deps only
+#   ./deploy.sh              # preferred: run as your desktop user (ashwathama)
+#   sudo ./deploy.sh         # OK: PM2 still runs as SUDO_USER, not root
 #
 # Env (from .env): HOST, PORT, RELOAD, CORS_ORIGINS, BACKEND_URL
 
@@ -43,6 +43,71 @@ source_env_file() {
   rm -f "$tmp"
 }
 
+DEPLOY_USER="${DEPLOY_USER:-${SUDO_USER:-$USER}}"
+DEPLOY_HOME="$(getent passwd "$DEPLOY_USER" 2>/dev/null | cut -d: -f6 || echo "$HOME")"
+DEPLOY_UID="$(id -u "$DEPLOY_USER" 2>/dev/null || id -u)"
+
+resolve_xauthority() {
+  if [ -n "${XAUTHORITY:-}" ] && [ ! -f "${XAUTHORITY}" ]; then
+    warn "XAUTHORITY=${XAUTHORITY} not found — auto-detecting for ${DEPLOY_USER}"
+    unset XAUTHORITY
+  fi
+  if [ -n "${XAUTHORITY:-}" ] && [ -f "${XAUTHORITY}" ]; then
+    return 0
+  fi
+  local candidate
+  for candidate in \
+    "${DEPLOY_HOME}/.Xauthority" \
+    "/run/user/${DEPLOY_UID}/gdm/Xauthority" \
+    "/run/user/${DEPLOY_UID}/Xauthority"; do
+    if [ -f "$candidate" ]; then
+      export XAUTHORITY="$candidate"
+      return 0
+    fi
+  done
+  # Mutter/Wayland Xwayland auth cookie (Pi OS Bookworm+)
+  for candidate in /run/user/"${DEPLOY_UID}"/.mutter-Xwaylandauth.*; do
+    if [ -f "$candidate" ]; then
+      export XAUTHORITY="$candidate"
+      return 0
+    fi
+  done
+  unset XAUTHORITY
+  return 1
+}
+
+setup_session_env() {
+  export DISPLAY="${DISPLAY:-:0}"
+  export INPUT_BACKEND="${INPUT_BACKEND:-auto}"
+  if ! resolve_xauthority; then
+    warn "No .Xauthority found for ${DEPLOY_USER} — xdotool may fail."
+    warn "Unset XAUTHORITY in .env or set: XAUTHORITY=${DEPLOY_HOME}/.Xauthority"
+  else
+    info "DISPLAY=${DISPLAY} XAUTHORITY=${XAUTHORITY}"
+  fi
+}
+
+run_as_deploy_user() {
+  if [[ "$(id -u)" -eq 0 && -n "${SUDO_USER:-}" && "$DEPLOY_USER" != "root" ]]; then
+    sudo -u "$DEPLOY_USER" -H env \
+      DISPLAY="${DISPLAY}" \
+      XAUTHORITY="${XAUTHORITY:-}" \
+      INPUT_BACKEND="${INPUT_BACKEND}" \
+      HOME="${DEPLOY_HOME}" \
+      bash -c "$*"
+  else
+    bash -c "$*"
+  fi
+}
+
+pm2_cmd() {
+  if [[ "$(id -u)" -eq 0 && -n "${SUDO_USER:-}" && "$DEPLOY_USER" != "root" ]]; then
+    sudo -u "$DEPLOY_USER" -H pm2 "$@"
+  else
+    pm2 "$@"
+  fi
+}
+
 SKIP_PM2=0
 for arg in "$@"; do
   case "$arg" in
@@ -73,6 +138,12 @@ HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-5000}"
 PM2_NAME="${PM2_NAME:-moviecontroller-backend}"
 
+setup_session_env
+
+if [[ "$(id -u)" -eq 0 && -n "${SUDO_USER:-}" && "$DEPLOY_USER" != "root" ]]; then
+  info "Deploy user: ${DEPLOY_USER} (PM2 + input control run as this user, not root)"
+fi
+
 if ! command -v python3 &>/dev/null; then
   err "python3 is not installed."
   exit 1
@@ -85,17 +156,17 @@ fi
 
 step "Python virtual environment"
 if [ ! -d "env" ]; then
-  python3 -m venv env
+  run_as_deploy_user "cd '${SCRIPT_DIR}' && python3 -m venv env"
 fi
-# shellcheck disable=SC1091
-source env/bin/activate
+if [[ "$(id -u)" -eq 0 && -n "${SUDO_USER:-}" && "$DEPLOY_USER" != "root" ]]; then
+  chown -R "${DEPLOY_USER}:${DEPLOY_USER}" env 2>/dev/null || true
+fi
 
 step "Installing dependencies"
-pip install --upgrade pip >/dev/null
-pip install -r requirements.txt
+run_as_deploy_user "cd '${SCRIPT_DIR}' && source env/bin/activate && pip install --upgrade pip >/dev/null && pip install -r requirements.txt"
 
 step "Verifying imports"
-python -c "import fastapi, uvicorn, pyautogui, dotenv; print('ok')" >/dev/null
+run_as_deploy_user "cd '${SCRIPT_DIR}' && source env/bin/activate && python -c \"import fastapi, uvicorn, dotenv; from utils.input_control import diagnostics; print('ok')\""
 
 if [ "$SKIP_PM2" -eq 1 ]; then
   ELAPSED=$(( $(date +%s) - START_TS ))
@@ -116,17 +187,13 @@ for pid in $(lsof -t -i ":${PORT}" 2>/dev/null || true); do
 done
 sleep 1
 
-step "Starting PM2 (${PM2_NAME})"
-pm2 delete "$PM2_NAME" >/dev/null 2>&1 || true
-pm2 start env/bin/uvicorn \
-  --name "$PM2_NAME" \
-  --cwd "$SCRIPT_DIR" \
-  --interpreter none \
-  -- app:app --host "$HOST" --port "$PORT"
-pm2 save >/dev/null 2>&1 || true
+step "Starting PM2 (${PM2_NAME}) as ${DEPLOY_USER}"
+pm2_cmd delete "$PM2_NAME" >/dev/null 2>&1 || true
+run_as_deploy_user "cd '${SCRIPT_DIR}' && HOST='${HOST}' PORT='${PORT}' PM2_NAME='${PM2_NAME}' DISPLAY='${DISPLAY}' XAUTHORITY='${XAUTHORITY:-}' INPUT_BACKEND='${INPUT_BACKEND}' pm2 start ecosystem.config.cjs"
+pm2_cmd save >/dev/null 2>&1 || true
 
 sleep 2
-if pm2 list 2>/dev/null | grep -q "${PM2_NAME}.*online"; then
+if pm2_cmd list 2>/dev/null | grep -q "${PM2_NAME}.*online"; then
   info "PM2 process online"
 else
   err "PM2 process failed to start. Check: pm2 logs ${PM2_NAME}"
