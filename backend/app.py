@@ -35,6 +35,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+async def health():
+    return {"status": "ok", "message": "Movie Controller API is running"}
+
 @app.post("/move")
 async def move_mouse(request: Request):
     data = await request.json()
