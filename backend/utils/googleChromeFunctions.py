@@ -1,4 +1,4 @@
-import pyautogui as py
+from utils.input_control import py
 
 def searchGoogleChrome(searchData):
     py.press('esc')

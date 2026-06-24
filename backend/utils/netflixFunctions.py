@@ -1,4 +1,4 @@
-import pyautogui as py
+from utils.input_control import py
 
 def searchNetflix(searchData):
     py.click(1630, 115)

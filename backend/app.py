@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-import pyautogui
+from utils.input_control import moveRel, scroll, click, diagnostics, get_backend_name
 
 load_dotenv()
 
@@ -39,29 +39,33 @@ app.add_middleware(
 async def health():
     return {"status": "ok", "message": "Movie Controller API is running"}
 
+@app.get("/input/status")
+async def input_status():
+    return diagnostics()
+
 @app.post("/move")
 async def move_mouse(request: Request):
     data = await request.json()
     dx = data.get("dx", 0)
     dy = data.get("dy", 0)
-    print(f"Received move request: {data}")
-    pyautogui.moveRel(dx, dy)
+    print(f"Received move request: {data} [backend={get_backend_name()}]")
+    moveRel(dx, dy)
     return {"status": "success", "message": f"Moved by dx={dx}, dy={dy}"}
 
 @app.post("/scroll")
 async def scroll_page(request: Request):
     data = await request.json()
     dy = data.get("dy", 0)
-    print(f"Received scroll request: {data}")
-    pyautogui.scroll(int(dy))
+    print(f"Received scroll request: {data} [backend={get_backend_name()}]")
+    scroll(int(dy))
     return {"status": "success", "message": f"Scrolled by dy={dy}"}
 
 @app.post("/click")
 async def mouse_click(request: Request):
     data = await request.json()
     button = data.get("button", "left")
-    print(f"Received click request: {data}")
-    pyautogui.click(button=button)
+    print(f"Received click request: {data} [backend={get_backend_name()}]")
+    click(button=button)
     return {"status": "success", "message": f"Performed {button} click"}
 
 @app.post("/action")

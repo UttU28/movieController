@@ -1,4 +1,4 @@
-import pyautogui as py
+from utils.input_control import py
 
 def searchPrime(searchData):
     py.click(1710, 110)
