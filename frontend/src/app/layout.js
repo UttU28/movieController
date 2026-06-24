@@ -1,7 +1,8 @@
 // app/layout.js
 import localFont from "next/font/local";
 import "./globals.css";
-import { AppStateProvider } from "../context/AppStateContext"; // Import AppStateProvider
+import { AppStateProvider } from "../context/AppStateContext";
+import ThemeRegistry from "./ThemeRegistry";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -23,9 +24,11 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
-        <AppStateProvider> {/* Wrap everything inside the provider */}
-          {children}
-        </AppStateProvider>
+        <ThemeRegistry>
+          <AppStateProvider>
+            {children}
+          </AppStateProvider>
+        </ThemeRegistry>
       </body>
     </html>
   );

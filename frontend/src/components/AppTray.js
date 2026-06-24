@@ -26,8 +26,8 @@ export default function AppTray() {
         <Container>
             <Grid container spacing={0}>
                 {appTray.map((group, index) => (
-                    <Grid item xs={12} key={index}>
-                        <Box display="flex" justifyContent="center" mb={2}>
+                    <Grid size={12} key={index}>
+                        <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
                             {group.map((button, secondIndex) => (
                                 <Box mx={0} key={secondIndex}>
                                     <NormalButton

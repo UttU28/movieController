@@ -7,8 +7,8 @@ const ButtonGroup = ({ buttonData, whatContainer }) => {
     <Container className={whatContainer}>
       <Grid container spacing={0} mb={1}>
         {buttonData.map((group, index) => (
-          <Grid item xs={12} key={index}>
-            <Box display="flex" justifyContent="center" mb={1}>
+          <Grid size={12} key={index}>
+            <Box sx={{ display: "flex", justifyContent: "center", mb: 1 }}>
               {group.map((button, secondIndex) => (
                 <Box mx={0} key={secondIndex}>
                   <NormalButton 

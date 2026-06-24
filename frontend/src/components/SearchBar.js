@@ -41,10 +41,12 @@ export default function SearchBar({ visibleContentId }) {
                     variant="filled" 
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)} 
-                    InputProps={{
-                        style: { 
-                            color: 'white', 
-                            backgroundColor: 'black', 
+                    slotProps={{
+                        input: {
+                            style: {
+                                color: 'white',
+                                backgroundColor: 'black',
+                            },
                         },
                     }}
                     sx={{

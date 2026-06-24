@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BASE_URL = "http://192.168.0.132:5000";
+const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://192.168.0.53:5000";
 
 export const sendMovement = async (dx, dy) => {
   try {

@@ -1,4 +1,5 @@
 fastapi
 fastapi_cors
 pyautogui
+python-dotenv
 uvicorn
