@@ -24,6 +24,8 @@ FRONTEND_PORT="${FRONTEND_PORT:-9280}"
 PM2_NAME="${PM2_NAME:-moviecontroller-frontend}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../../deploy-lib.sh
+source "${SCRIPT_DIR}/../../deploy-lib.sh"
 cd "$SCRIPT_DIR"
 
 NGINX_AVAILABLE="/etc/nginx/sites-available/${FRONTEND_DOMAIN}"
@@ -100,10 +102,6 @@ nginx_install_rendered() {
   sed "s/__FRONTEND_PORT__/${FRONTEND_PORT}/g" "$src" | tee "$dest" >/dev/null
 }
 
-le_cert_exists() {
-  [ -f "$LE_CERT" ] || [ -f "/etc/letsencrypt/renewal/${FRONTEND_DOMAIN}.conf" ]
-}
-
 run_certbot() {
   if ! command -v certbot &>/dev/null; then
     err "certbot not installed. Install certbot, then:"
@@ -142,7 +140,7 @@ deploy_nginx_ssl() {
   banner "Nginx + SSL (${FRONTEND_DOMAIN})"
 
   step "Install nginx vhost (${FRONTEND_DOMAIN}) → 127.0.0.1:${FRONTEND_PORT}"
-  if le_cert_exists; then
+  if le_cert_exists "${FRONTEND_DOMAIN}"; then
     info "Certificate found — HTTPS template."
     nginx_install_rendered "${HTTPS_NGINX_SRC}" "$NGINX_AVAILABLE"
   else
@@ -157,7 +155,7 @@ deploy_nginx_ssl() {
   nginx -t
   systemctl reload nginx 2>/dev/null || service nginx reload
 
-  if ! le_cert_exists; then
+  if ! le_cert_exists "${FRONTEND_DOMAIN}"; then
     run_certbot
     step "Apply production nginx template (HTTPS + redirect)"
     nginx_install_rendered "${HTTPS_NGINX_SRC}" "$NGINX_AVAILABLE"
