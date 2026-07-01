@@ -24,8 +24,8 @@ FRONTEND_PORT="${FRONTEND_PORT:-9280}"
 PM2_NAME="${PM2_NAME:-moviecontroller-frontend}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../../deploy-lib.sh
-source "${SCRIPT_DIR}/../../deploy-lib.sh"
+# shellcheck source=../../deployLib.sh
+source "${SCRIPT_DIR}/../../dktp/deployLib.sh"
 cd "$SCRIPT_DIR"
 
 NGINX_AVAILABLE="/etc/nginx/sites-available/${FRONTEND_DOMAIN}"
