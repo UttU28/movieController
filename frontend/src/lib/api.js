@@ -23,3 +23,9 @@ export const pointerSocketUrl = () => `${baseUrl().replace(/^http/, "ws")}/ws/po
 
 export const errorMessage = (err) =>
   err?.response?.data?.detail || (err?.code === "ERR_NETWORK" ? "Can't reach the backend" : err?.message) || "Request failed";
+
+export const getMode = async () => (await client.get(`${baseUrl()}/mode`)).data;
+
+export const setMode = async (mode) => (await client.post(`${baseUrl()}/mode`, { mode })).data;
+
+export const pauseAll = async () => (await client.post(`${baseUrl()}/pause-all`)).data;

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-mode="{{MODE}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -137,6 +137,67 @@
   .youtube { background: #ff0033; }
   .prime { background: #1a98ff; }
   .netflix { background: #e50914; }
+
+  /* ---------- Night mode: minimal, near-black ---------- */
+  [data-mode="night"] html,
+  [data-mode="night"] body {
+    background: #000;
+    color: #ccc;
+  }
+  [data-mode="night"] .panel {
+    background: #0a0a0a;
+    border-color: #1a1a1a;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.9);
+  }
+  [data-mode="night"] .panel h1 {
+    color: #ddd;
+  }
+  [data-mode="night"] .eyebrow {
+    background: #333;
+  }
+  [data-mode="night"] .url {
+    background: #111;
+    border-color: #222;
+  }
+  [data-mode="night"] .url a {
+    color: #aaa;
+  }
+  [data-mode="night"] .url button {
+    background: #333;
+  }
+  [data-mode="night"] p {
+    color: #555;
+  }
+  [data-mode="night"] .apps {
+    background: #0a0a0a;
+    border-color: #1a1a1a;
+  }
+
+  /* ---------- Live mode: noise canvas background ---------- */
+  [data-mode="live"] body {
+    overflow: hidden;
+  }
+  [data-mode="live"] main {
+    position: relative;
+    z-index: 1;
+  }
+  #noise-canvas {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    opacity: 0.08;
+    pointer-events: none;
+    filter: blur(1px);
+  }
+
+  /* Noise grain animation */
+  @keyframes noise {
+    0%   { background-position: 0 0; }
+    25%  { background-position: -10% 15%; }
+    50%  { background-position: 15% -10%; }
+    75%  { background-position: -15% -5%; }
+    100% { background-position: 10% 10%; }
+  }
 </style>
 </head>
 <body>
@@ -182,6 +243,8 @@
     button.textContent = "Copied";
     setTimeout(() => { button.textContent = "Copy"; }, 1400);
   });
+{{NOISE_SCRIPT}}
+</script>
 </script>
 </body>
 </html>

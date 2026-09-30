@@ -34,6 +34,9 @@ CORS_ORIGINS = [
 ]
 
 session = ChromeSession()
+# Global mode state for the QR page / phone UI.
+MODE_STATE: dict = {"mode": "day"}
+
 web_apps = {
     "youtube": YouTubeRemote(session),
     "prime": PrimeRemote(session),
@@ -114,9 +117,9 @@ def health():
 
 
 @app.get("/qr", response_class=HTMLResponse)
-def qr():
-    """QR code for the phone remote's URL."""
-    return qr_page.render()
+def qr(mode: str = ""):
+    """QR code for the phone remote's URL, themed to match the selected mode."""
+    return qr_page.render(mode)
 
 
 @app.get("/state")
@@ -132,6 +135,33 @@ def screenshot(app: str = "youtube"):
     return Response(content=png, media_type="image/png", headers={"Cache-Control": "no-store"})
 
 
+@app.get("/mode")
+def get_mode():
+    """Current UI mode (day / night / live)."""
+    return MODE_STATE
+
+
+@app.post("/mode")
+def set_mode(request: Request):
+    """Switch UI mode. night / live pauses all playback and opens the QR tab."""
+    data = await request.json()
+    mode = (data.get("mode") or "day").lower()
+    if mode not in ("day", "night", "live"):
+        raise HTTPException(status_code=400, detail=f"Unknown mode '{mode}'")
+    MODE_STATE["mode"] = mode
+    if mode in ("night", "live"):
+        _pause_all_playback()
+        _switch_to_qr(mode)
+    return MODE_STATE
+
+
+@app.post("/pause-all")
+def pause_all():
+    """Pause every streaming tab (no tab switching)."""
+    _pause_all_playback()
+    return {"status": "success"}
+
+
 def _pause_other_web_apps(keep):
     """Stop playback on every streaming tab except `keep`. Does not change
     which tab Chrome is showing (pause runs over each tab's DevTools socket)."""
@@ -145,6 +175,33 @@ def _pause_other_web_apps(keep):
                 remote.pause_playback()
             except Exception as e:
                 print(f"pause {name} failed: {e}")
+
+
+def _pause_all_playback():
+    """Pause every streaming tab simultaneously."""
+    with session.lock:
+        if not session.connect(launch=False):
+            return
+        for name, remote in web_apps.items():
+            try:
+                remote.pause_playback()
+            except Exception as e:
+                print(f"pause {name} failed: {e}")
+
+
+def _switch_to_qr(mode=""):
+    """Open/activate the QR tab (with optional mode param) and bring it to front."""
+    with session.lock:
+        if not session.connect(launch=False):
+            return
+        qr_url = f"http://127.0.0.1:{PORT}/qr"
+        if mode:
+            qr_url += f"?mode={mode}"
+        try:
+            session.use_tab((f":{PORT}/qr",), qr_url)
+            session.bring_to_front()
+        except Exception as e:
+            print(f"switch to QR failed: {e}")
 
 
 @app.post("/app")
