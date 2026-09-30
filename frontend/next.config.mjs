@@ -9,6 +9,8 @@ const lanAddresses = Object.values(os.networkInterfaces())
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   allowedDevOrigins: lanAddresses,
+  // Hide the Next.js dev badge (the "N" in the corner).
+  devIndicators: false,
 };
 
 export default nextConfig;
