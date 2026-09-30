@@ -3,7 +3,7 @@
 // readers for the detail page (seasons, episodes) and the player. Re-sent on
 // every call and guarded by VERSION, so page reloads simply reinstall it.
 (() => {
-  const VERSION = 4;
+  const VERSION = 5;
   if (window.__prv && window.__prv.version === VERSION) return;
 
   const FOCUS_ATTR = 'data-prv-focus';
@@ -359,6 +359,13 @@
     markNextUp() {
       const p = playerEl();
       return markForClick(playerButton(/^Next Episode/i) || (p && p.querySelector('.atvwebplayersdk-nextupcard-button')));
+    },
+
+    pause() {
+      const v = video();
+      if (!v || v.paused) return false;
+      v.pause();
+      return true;
     },
 
     volume(delta) {

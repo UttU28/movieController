@@ -2,6 +2,8 @@ import asyncio
 import json
 import os
 import threading
+import time
+import urllib.request
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
@@ -53,8 +55,6 @@ keeper = TabKeeper(session, [
 @asynccontextmanager
 async def lifespan(app):
     if LAUNCH_ON_START:
-        # Attach to (or start) Chrome in the background so the API is up
-        # immediately. This doesn't bring Chrome to the front.
         threading.Thread(target=_safe_connect, daemon=True).start()
     keeper.start()
     yield
@@ -63,14 +63,31 @@ async def lifespan(app):
         session.teardown()
 
 
+def _wait_for_qr(timeout=20):
+    url = f"http://127.0.0.1:{PORT}/qr"
+    end = time.time() + timeout
+    while time.time() < end:
+        try:
+            urllib.request.urlopen(url, timeout=1)
+            return True
+        except OSError:
+            time.sleep(0.25)
+    return False
+
+
 def _safe_connect():
+    qr_url = f"http://127.0.0.1:{PORT}/qr"
+    qr_marker = f":{PORT}/qr"
     try:
+        _wait_for_qr()
         with session.lock:
             session.connect(launch=True)
             keeper.check()
+            session.use_tab((qr_marker,), qr_url)
+            session.bring_to_front()
     except Exception as e:
         print(f"Chrome launch failed: {e}")
-    print(f"Phone remote: {qr_page.remote_url()}  (QR code at http://127.0.0.1:{PORT}/qr)")
+    print(f"Phone remote: {qr_page.remote_url()}  (QR code at {qr_url})")
 
 
 app = FastAPI(lifespan=lifespan)
@@ -115,16 +132,33 @@ def screenshot(app: str = "youtube"):
     return Response(content=png, media_type="image/png", headers={"Cache-Control": "no-store"})
 
 
+def _pause_other_web_apps(keep):
+    """Stop playback on every streaming tab except `keep`. Does not change
+    which tab Chrome is showing (pause runs over each tab's DevTools socket)."""
+    with session.lock:
+        if not session.connect(launch=False):
+            return
+        for name, remote in web_apps.items():
+            if name == keep:
+                continue
+            try:
+                remote.pause_playback()
+            except Exception as e:
+                print(f"pause {name} failed: {e}")
+
+
 @app.post("/app")
 async def switch_app(request: Request):
     """Called when you pick an app on the phone: Chrome switches to (or opens)
-    that app's tab and comes to the front. Laptop needs nothing."""
+    that app's tab and comes to the front. Laptop needs nothing, and leaving
+    a stream playing while you use the laptop remote is intentional."""
     data = await request.json()
     name = data.get("app")
     print(f"Switch app: {name}")
     if name == "laptop":
         return {"status": "success", "app": name}
     try:
+        await asyncio.to_thread(_pause_other_web_apps, name)
         return {"status": "success", "app": name, "state": _web_app(name).show()}
     except WebDriverException as e:
         raise HTTPException(status_code=500, detail=str(e).splitlines()[0])

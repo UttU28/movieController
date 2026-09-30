@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import AppSwitcher, { APPS } from "../components/AppSwitcher";
 import { showApp } from "../lib/api";
+import usePcVolumeKeys from "../lib/usePcVolumeKeys";
 import JellyfinPanel from "../panels/JellyfinPanel";
 import LaptopPanel from "../panels/LaptopPanel";
 import NetflixPanel from "../panels/NetflixPanel";
@@ -15,6 +16,7 @@ const THEME_COLORS = { laptop: "#0d0e12", youtube: "#0f0f0f", prime: "#0b1219", 
 
 export default function Home() {
   const [app, setApp] = useState(null);
+  usePcVolumeKeys();
 
   // Restore the last app, without switching Chrome's tab on page load.
   useEffect(() => {

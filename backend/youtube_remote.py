@@ -50,6 +50,16 @@ class YouTubeRemote(ChromeApp):
         script = REMOTE_JS + f"\nreturn window.__ytr.{fn}.apply(null, arguments);"
         return self.driver.execute_script(script, *args)
 
+    def pause_playback(self):
+        tab = self.session.find_tab(self.HOSTS)
+        if tab is None:
+            return False
+        try:
+            return bool(self.session.eval_in_tab(tab, REMOTE_JS + "\nwindow.__ytr.pause();"))
+        except Exception as e:
+            print(f"youtube pause failed: {e}")
+            return False
+
     def _keys(self, *keys, shift=False):
         self._js("blur")
         chain = ActionChains(self.driver)

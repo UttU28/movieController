@@ -54,6 +54,16 @@ class PrimeRemote(ChromeApp):
         script = PRIME_JS + f"\nreturn window.__prv.{fn}.apply(null, arguments);"
         return self.driver.execute_script(script, *args)
 
+    def pause_playback(self):
+        tab = self.session.find_tab(self.HOSTS)
+        if tab is None:
+            return False
+        try:
+            return bool(self.session.eval_in_tab(tab, PRIME_JS + "\nwindow.__prv.pause();"))
+        except Exception as e:
+            print(f"prime pause failed: {e}")
+            return False
+
     def _page_state(self):
         return self._js("state")
 

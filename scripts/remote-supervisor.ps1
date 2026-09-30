@@ -88,6 +88,27 @@ function Start-RoleWindow([string]$Name) {
   ) | Out-Null
 }
 
+function Invoke-GitPull {
+  $git = (Get-Command git -ErrorAction SilentlyContinue).Source
+  if (-not $git) {
+    Write-Log 'supervisor.log' 'git not found. Starting with the local files.'
+    return
+  }
+  Write-Log 'supervisor.log' "Pulling latest in $Root"
+  Push-Location $Root
+  try {
+    $out = & $git pull --ff-only 2>&1 | ForEach-Object { "$_" }
+    foreach ($line in $out) { Write-Log 'supervisor.log' $line }
+    if ($LASTEXITCODE -ne 0) {
+      Write-Log 'supervisor.log' "git pull failed (exit $LASTEXITCODE). Starting anyway."
+    }
+  } catch {
+    Write-Log 'supervisor.log' "git pull failed: $_. Starting anyway."
+  } finally {
+    Pop-Location
+  }
+}
+
 if ($Role -eq 'supervisor') {
   $created = $false
   $mutex = New-Object System.Threading.Mutex($true, 'MovieControllerRemoteSupervisor', [ref]$created)
@@ -103,6 +124,7 @@ if ($Role -eq 'supervisor') {
   Write-Host 'Close this window, then the two server windows, to stop.'
   Write-Host ''
   Write-Log 'supervisor.log' 'Supervisor started'
+  Invoke-GitPull
 
   Start-RoleWindow 'backend'
   Start-RoleWindow 'frontend'

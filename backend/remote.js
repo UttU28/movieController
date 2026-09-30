@@ -3,7 +3,7 @@
 // (D-pad), plus helpers to read/drive the player. Re-sent on every call and
 // guarded by VERSION, so full page reloads simply reinstall it.
 (() => {
-  const VERSION = 15;
+  const VERSION = 16;
   if (window.__ytr && window.__ytr.version === VERSION) return;
 
   const FOCUS_ATTR = 'data-ytr-focus';
@@ -389,6 +389,17 @@
       if (!v) return false;
       if (v.paused) v.play(); else v.pause();
       return true;
+    },
+
+    pause() {
+      let stopped = false;
+      document.querySelectorAll('video').forEach((v) => {
+        if (!v.paused && !v.ended) {
+          v.pause();
+          stopped = true;
+        }
+      });
+      return stopped;
     },
 
     seek(delta) {

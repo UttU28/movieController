@@ -3,7 +3,7 @@
 // readers for seasons, episodes and the player. Re-sent on every call and
 // guarded by VERSION, so page reloads simply reinstall it.
 (() => {
-  const VERSION = 5;
+  const VERSION = 6;
   if (window.__nfr && window.__nfr.version === VERSION) return;
 
   const FOCUS_ATTR = 'data-nfr-focus';
@@ -409,6 +409,20 @@
       if (!p) return false;
       if (p.isPaused()) p.play(); else p.pause();
       return true;
+    },
+
+    pause() {
+      const p = nfPlayer();
+      if (p && !p.isPaused()) {
+        p.pause();
+        return true;
+      }
+      const v = video();
+      if (v && !v.paused) {
+        v.pause();
+        return true;
+      }
+      return false;
     },
 
     seek(seconds) {

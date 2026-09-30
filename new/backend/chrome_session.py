@@ -366,6 +366,10 @@ class ChromeApp:
             self.session.bring_to_front()
             return self._state()
 
+    def pause_playback(self):
+        """Pause this app if it's playing. Must not change which tab is showing."""
+        return False
+
     def screenshot(self):
         with self.session.lock:
             try:

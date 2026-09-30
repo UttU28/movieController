@@ -50,6 +50,16 @@ class NetflixRemote(ChromeApp):
         script = NETFLIX_JS + f"\nreturn window.__nfr.{fn}.apply(null, arguments);"
         return self.driver.execute_script(script, *args)
 
+    def pause_playback(self):
+        tab = self.session.find_tab(self.HOSTS)
+        if tab is None:
+            return False
+        try:
+            return bool(self.session.eval_in_tab(tab, NETFLIX_JS + "\nwindow.__nfr.pause();"))
+        except Exception as e:
+            print(f"netflix pause failed: {e}")
+            return False
+
     def _page(self):
         return self._js("state")["pageType"]
 

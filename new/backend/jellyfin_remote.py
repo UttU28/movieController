@@ -154,6 +154,19 @@ class JellyfinRemote(ChromeApp):
         state = self._js("state")
         return state.get("pageType") == "player"
 
+    def pause_playback(self):
+        if self._tab() is None:
+            return False
+        try:
+            player = (self._js("state") or {}).get("player") or {}
+            if not player or player.get("paused"):
+                return False
+            self._js("playstate", "Pause")
+            return True
+        except Exception as e:
+            print(f"jellyfin pause failed: {e}")
+            return False
+
     # ------------------------------------------------------------------ actions
 
     def _do_seekBack(self):
