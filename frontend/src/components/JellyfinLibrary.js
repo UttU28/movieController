@@ -198,7 +198,7 @@ function ItemSheet({ item, action, onOpen }) {
   );
 }
 
-export default function JellyfinLibrary({ library, action }) {
+export default function JellyfinLibrary({ library, action, onClose }) {
   const { view, depth, data, loading, error, open, back, reset, more } = library;
   const title =
     view.kind === "home" ? "Library" : view.kind === "search" ? `Search: ${view.query}` : data?.parent?.name || data?.name || view.name || "";
@@ -219,6 +219,11 @@ export default function JellyfinLibrary({ library, action }) {
         {depth > 1 && (
           <Tap className="jf-icon-btn" aria-label="Library home" onPress={() => reset()}>
             <FontAwesomeIcon icon={faHouse} />
+          </Tap>
+        )}
+        {onClose && (
+          <Tap className="pill-btn" onPress={onClose}>
+            Remote
           </Tap>
         )}
       </div>

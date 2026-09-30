@@ -3,7 +3,7 @@
 // (D-pad), plus helpers to read/drive the player. Re-sent on every call and
 // guarded by VERSION, so full page reloads simply reinstall it.
 (() => {
-  const VERSION = 13;
+  const VERSION = 15;
   if (window.__ytr && window.__ytr.version === VERSION) return;
 
   const FOCUS_ATTR = 'data-ytr-focus';
@@ -41,9 +41,14 @@
   ].join(',');
 
   function injectStyle() {
-    if (document.getElementById('ytr-style')) return;
-    const s = document.createElement('style');
-    s.id = 'ytr-style';
+    let s = document.getElementById('ytr-style');
+    if (s && s.dataset.v === String(VERSION)) return;
+    if (!s) {
+      s = document.createElement('style');
+      s.id = 'ytr-style';
+      (document.head || document.documentElement).appendChild(s);
+    }
+    s.dataset.v = String(VERSION);
     s.textContent = `
       [${FOCUS_ATTR}] {
         outline: 4px solid #3ea6ff !important;
@@ -53,8 +58,9 @@
         transition: outline-color .1s, box-shadow .1s;
       }
       #movie_player[${FOCUS_ATTR}] { outline-offset: -4px !important; border-radius: 0 !important; box-shadow: none !important; }
+      /* No highlight while the video is fullscreen. */
+      :fullscreen [${FOCUS_ATTR}], [${FOCUS_ATTR}]:fullscreen { outline: none !important; box-shadow: none !important; }
     `;
-    (document.head || document.documentElement).appendChild(s);
   }
 
   function pageType() {
@@ -389,6 +395,14 @@
       const v = video();
       if (!v) return false;
       v.currentTime = clamp(v.currentTime + delta, 0, isFinite(v.duration) ? v.duration - 0.5 : 1e9);
+      return true;
+    },
+
+    // Jump to a point (0..1) in the video, from the phone's progress bar.
+    seekTo(fraction) {
+      const v = video();
+      if (!v || !isFinite(v.duration)) return false;
+      v.currentTime = clamp(fraction, 0, 1) * (v.duration - 0.5);
       return true;
     },
 

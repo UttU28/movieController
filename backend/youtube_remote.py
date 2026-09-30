@@ -190,6 +190,9 @@ class YouTubeRemote(ChromeApp):
     def _do_seekForward(self):
         return self._js("seek", SEEK_SECONDS)
 
+    def _do_seekTo(self, fraction=None):
+        return self._js("seekTo", float(fraction))
+
     def _volume_keys(self, key, presses):
         # Real key presses show YouTube's volume overlay on screen and go
         # through the same path as a keyboard; the JS API is the fallback.

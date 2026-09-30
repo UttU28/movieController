@@ -88,10 +88,10 @@ export function fmt(sec) {
 const RESULT_KINDS = { short: "Short", playlist: "Playlist", mix: "Mix", channel: "Channel" };
 
 // Search results as a tappable list (title, channel, length).
-function ResultList({ results, onOpen }) {
+export function ResultList({ results, onOpen, header = true }) {
   return (
     <div className="detail">
-      <div className="eyebrow">Top results · tap to play</div>
+      {header && <div className="eyebrow">Top results · tap to play</div>}
       <ol className="results">
         {results.map((r) => (
           <li key={r.href}>

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import AppSwitcher, { APPS } from "../components/AppSwitcher";
 import { showApp } from "../lib/api";
 import JellyfinPanel from "../panels/JellyfinPanel";
@@ -41,17 +40,9 @@ export default function Home() {
     if (WEB_APPS.has(next)) showApp(next).catch(() => {});
   };
 
-  const current = APPS.find((a) => a.id === app);
-
   return (
     <main className="remote">
-      <header className="topbar">
-        <div className="brand">
-          {current && <FontAwesomeIcon icon={current.icon} className="brand-icon" />}
-          <span>{current ? `${current.label} Remote` : "Remote"}</span>
-        </div>
-        {app && <AppSwitcher app={app} onChange={choose} />}
-      </header>
+      <header className="topbar">{app && <AppSwitcher app={app} onChange={choose} />}</header>
 
       {app === "laptop" && <LaptopPanel />}
       {app === "youtube" && <YouTubePanel />}

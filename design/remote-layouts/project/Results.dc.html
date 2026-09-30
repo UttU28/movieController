@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>YouTube remote, search results open</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#0b0b0c;color:#f1f1f1}
+.tab{display:flex;align-items:center;justify-content:center;height:52px;border-radius:12px;background:transparent;border:0;color:#a0a0a6;font:700 11px system-ui,sans-serif;padding:0}
+.res{width:100%;display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:12px;background:#2a2a2d;border:0;color:#f1f1f1;text-align:left}
+.res span.t{display:flex;flex-direction:column;gap:3px;min-width:0}
+.res b{font-size:13px;line-height:1.25}
+.res small{font-size:11px;color:#a0a0a6}
+.len{flex:none;margin-left:auto;padding:2px 6px;border-radius:6px;background:#0f0f0f;color:#a0a0a6;font:700 11px system-ui,sans-serif}
+.pill{height:30px;padding:0 12px;border-radius:999px;background:#2a2a2d;border:1px solid #333338;color:#f1f1f1;font:700 12px system-ui,sans-serif}
+.pin{position:absolute;z-index:3;width:22px;height:22px;border-radius:50%;background:#f5a623;color:#141413;font:800 12px system-ui,sans-serif;display:grid;place-items:center;box-shadow:0 0 0 3px #0b0b0c}
+.leg{display:flex;gap:12px;align-items:flex-start}
+.leg .n{flex:none;width:24px;height:24px;border-radius:50%;background:#f5a623;color:#141413;font:800 12px system-ui,sans-serif;display:grid;place-items:center}
+.leg h3{margin:0 0 2px;font-size:15px;font-weight:700;color:#f1f1f1}
+.leg p{margin:0;font-size:13px;line-height:1.45;color:#b4b4ba}
+</style>
+</helmet>
+<div style="width: 880px; height: 844px; display: flex; background: #0b0b0c">
+<div style="position: relative; width: 390px; height: 844px; flex: none; box-sizing: border-box; padding: 12px 16px 0; display: flex; flex-direction: column; gap: 10px; background: #0f0f0f; border-right: 1px solid #26262a; overflow: hidden">
+<div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 18px"><span style="color: {{accent}}">&#9654;</span>YouTube Remote</div>
+<nav aria-label="Apps" style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; padding: 4px; background: #1c1c1e; border: 1px solid #333338; border-radius: 16px">
+<button class="tab">Laptop</button><button class="tab" style="background: {{accent}}; color: #ffffff">YouTube</button><button class="tab">Prime</button><button class="tab">Netflix</button><button class="tab">Jellyfin</button>
+</nav>
+<section style="position: relative; z-index: 2; background: #1c1c1e; border: 1px solid #333338; border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: center; gap: 10px">
+<div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+<div style="font-size: 11px; color: #a0a0a6; text-transform: uppercase; letter-spacing: .06em">Search results</div>
+<div style="font-weight: 700; font-size: 15px">Swipe the pad to start moving</div>
+</div>
+<button aria-label="Search" style="flex: none; width: 46px; height: 46px; border-radius: 50%; background: #2a2a2d; border: 1px solid #333338; color: #f1f1f1; font-size: 16px; padding: 0">&#9906;</button>
+</div>
+<div style="position: relative; align-self: flex-start"><button class="pill" style="border-color: #3ea6ff; color: #3ea6ff">Hide results</button><span class="pin" style="right: -14px; top: -10px">5</span></div>
+</section>
+<div style="position: absolute; left: 0; right: 0; top: 0; bottom: 0; z-index: 1; background: rgba(0,0,0,.55)"></div>
+<span class="pin" style="left: 8px; top: 790px">13</span>
+<div style="position: absolute; z-index: 2; left: 16px; right: 16px; top: 254px; height: 430px; overflow: hidden; background: #1c1c1e; border: 1px solid #333338; border-radius: 16px; box-shadow: 0 18px 40px rgba(0,0,0,.55); padding: 0 10px 10px; display: flex; flex-direction: column; gap: 6px">
+<div style="position: relative; display: flex; align-items: center; justify-content: space-between; padding: 10px 0 6px">
+<span style="font-size: 11px; color: #a0a0a6; text-transform: uppercase; letter-spacing: .06em">Top results · tap to play</span>
+<button class="pill">Hide</button>
+<span class="pin" style="right: -8px; top: 0">12</span>
+</div>
+<button class="res"><span class="t"><b>Kung Fu Panda - Official Trailer 1 [HD]</b><small>TrailersPlaygroundHD</small></span><span class="len">2:10</span></button>
+<button class="res"><span class="t"><b>Kung Fu Panda | Official Trailer</b><small>Universal Kids</small></span><span class="len">1:13</span></button>
+<button class="res"><span class="t"><b>lofi hip hop radio · beats to relax/study to</b><small>Lofi Girl</small></span><span class="len" style="background: #cc0000; color: #ffffff">LIVE</span></button>
+<button class="res"><span class="t"><b>90's Chill Lofi · Study Music</b><small>Mix · The Japanese Town</small></span><span class="len">11:53:45</span></button>
+<button class="res"><span class="t"><b>How did they even do that??</b><small>Short</small></span></button>
+<span class="pin" style="left: -8px; top: 60px">11</span>
+</div>
+</div>
+<div style="flex-grow: 1; box-sizing: border-box; padding: 40px 36px; display: flex; flex-direction: column; gap: 18px">
+<div>
+<div style="font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #f5a623">Built · after a search</div>
+<h2 style="margin: 6px 0 0; font-size: 24px">Search results</h2>
+</div>
+<div class="leg"><span class="n">5</span><div><h3>Results toggle</h3><p>Pill in the title bar: "Show results (10)" when hidden, "Hide results" when open.</p></div></div>
+<div class="leg"><span class="n">11</span><div><h3>Results sheet</h3><p>Dropdown over the swipe pad with the top 10 results: title, channel (or Short / Mix / Playlist), and duration or LIVE. Tap one to play it; the sheet closes.</p></div></div>
+<div class="leg"><span class="n">12</span><div><h3>Hide button</h3><p>Closes the sheet. The results stay available from the results toggle.</p></div></div>
+<div class="leg"><span class="n">13</span><div><h3>Dimmed backdrop</h3><p>Everything behind the sheet dims; tapping anywhere on it closes the sheet. The app switcher stays usable.</p></div></div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#e0002a","options":["#e0002a","#0f79d0","#c40812","#0086b3"]},"$preview":{"width":880,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return { accent: this.props.accent ?? '#e0002a' };
+}
+}
+</script>
+</body>
+</html>

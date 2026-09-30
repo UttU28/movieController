@@ -25,7 +25,9 @@ import {
   faGear,
   faGripVertical,
   faHandPointer,
+  faKeyboard,
   faListCheck,
+  faPaperPlane,
   faPaste,
   faPlay,
   faPlus,
@@ -41,13 +43,11 @@ import {
   faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import RemoteButton, { buzz } from "../components/RemoteButton";
-import Trackpad, { ScrollStrip } from "../components/Trackpad";
+import Trackpad from "../components/Trackpad";
 import usePointerSocket from "../lib/usePointerSocket";
 import useRemote from "../lib/useRemote";
 
 const SENS_KEY = "remote.trackpadSensitivity";
-const ENTER_KEY = "remote.typeEnter";
-
 const HOTKEYS = [
   { action: "altTab", icon: faRightLeft, label: "Alt+Tab" },
   { action: "desktop", icon: faDesktop, label: "Win+D" },
@@ -68,18 +68,19 @@ const HOTKEYS = [
   { action: "undo", icon: faRotateLeft, label: "Undo" },
   { action: "selectAll", icon: faListCheck, label: "Select all" },
   { action: "screenshot", icon: faCropSimple, label: "Snip" },
-  { action: "key", value: "space", icon: faPlay, label: "Space" },
 ];
 
 const KEYS = [
   { value: "esc", label: "Esc" },
-  { value: "up", icon: faArrowUp },
   { value: "tab", label: "Tab" },
-  { value: "backspace", icon: faDeleteLeft },
+  { value: "backspace", icon: faDeleteLeft, label: "Back" },
+  { value: "delete", label: "Del" },
+  { value: "enter", icon: faTurnDown, label: "Enter" },
   { value: "left", icon: faArrowLeft },
+  { value: "up", icon: faArrowUp },
   { value: "down", icon: faArrowDown },
   { value: "right", icon: faArrowRight },
-  { value: "enter", icon: faTurnDown, label: "Enter" },
+  { value: "space", label: "Space" },
 ];
 
 const APPS = [
@@ -91,7 +92,7 @@ const APPS = [
   { id: "taskManager", icon: faListCheck, label: "Task Mgr" },
 ];
 
-function TextSend({ placeholder, button, onSend, clearOnSend = true }) {
+function TextSend({ placeholder, button, buttonLabel, onSend, autoFocus = false, clearOnSend = true }) {
   const [text, setText] = useState("");
   return (
     <form
@@ -110,11 +111,12 @@ function TextSend({ placeholder, button, onSend, clearOnSend = true }) {
         autoCapitalize="off"
         spellCheck={false}
         enterKeyHint="send"
+        autoFocus={autoFocus}
         placeholder={placeholder}
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
-      <button type="submit" className="send-btn">
+      <button type="submit" className="send-btn" aria-label={buttonLabel}>
         {button}
       </button>
     </form>
@@ -126,14 +128,12 @@ export default function LaptopPanel() {
   const { status, send } = usePointerSocket();
   const [sensitivity, setSensitivity] = useState(1.6);
   const [dragging, setDragging] = useState(false);
-  const [enterAfter, setEnterAfter] = useState(true);
+  const [typing, setTyping] = useState(false);
 
   useEffect(() => {
     try {
       const saved = parseFloat(localStorage.getItem(SENS_KEY));
       if (saved > 0) setSensitivity(saved);
-      const enter = localStorage.getItem(ENTER_KEY);
-      if (enter === "0") setEnterAfter(false);
     } catch {}
   }, []);
 
@@ -150,13 +150,10 @@ export default function LaptopPanel() {
     send({ t: "d", on: next });
   };
 
-  const typeText = async (text) => {
-    await action("type", { value: text });
-    if (enterAfter) action("key", { value: "enter" });
-  };
+  const typeText = (text) => action("type", { value: text });
 
   return (
-    <>
+    <div className="laptop">
       <section className="card laptop-status">
         <div className="card-row">
           <span className="page-pill">Laptop control</span>
@@ -168,7 +165,6 @@ export default function LaptopPanel() {
 
         <div className="pad-wrap">
           <Trackpad send={send} sensitivity={sensitivity} />
-          <ScrollStrip send={send} />
         </div>
 
         <label className="slider">
@@ -184,33 +180,29 @@ export default function LaptopPanel() {
           <b>{sensitivity.toFixed(1)}x</b>
         </label>
 
-        <div className="row four">
+        <div className="row five">
           <RemoteButton icon={faHandPointer} label="Left" onPress={() => send({ t: "c", b: "left" })} />
           <RemoteButton icon={faRepeat} label="Double" onPress={() => send({ t: "c", b: "left", double: true })} />
           <RemoteButton icon={faHandPointer} label="Right" onPress={() => send({ t: "c", b: "right" })} />
           <RemoteButton icon={faGripVertical} label={dragging ? "Release" : "Drag"} active={dragging} onPress={toggleDrag} />
+          <RemoteButton icon={faKeyboard} active={typing} onPress={() => setTyping(!typing)} />
         </div>
+
+        {typing && (
+          <TextSend
+            placeholder="Type on the laptop…"
+            button={<FontAwesomeIcon icon={faPaperPlane} />}
+            buttonLabel="Send"
+            autoFocus
+            onSend={typeText}
+          />
+        )}
       </section>
 
       {error && <div className="error">{error}</div>}
 
-      <h2 className="section-title">Keyboard</h2>
-      <TextSend placeholder="Type on the laptop…" button="Type" onSend={typeText} />
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={enterAfter}
-          onChange={(e) => {
-            const on = e.target.checked;
-            setEnterAfter(on);
-            try {
-              localStorage.setItem(ENTER_KEY, on ? "1" : "0");
-            } catch {}
-          }}
-        />
-        Press Enter after typing
-      </label>
-      <div className="row four keys">
+      <h2 className="section-title">Keys</h2>
+      <div className="row five keys">
         {KEYS.map((k) => (
           <RemoteButton
             key={k.value}
@@ -223,7 +215,7 @@ export default function LaptopPanel() {
       </div>
 
       <h2 className="section-title">Shortcuts</h2>
-      <div className="row four">
+      <div className="row five">
         {HOTKEYS.map((h) => (
           <RemoteButton
             key={h.label}
@@ -235,17 +227,17 @@ export default function LaptopPanel() {
       </div>
 
       <h2 className="section-title">Sound &amp; media</h2>
-      <div className="row three">
+      <div className="row six">
         <RemoteButton icon={faVolumeLow} label="Vol -" onPress={() => action("volumeDown")} />
         <RemoteButton icon={faVolumeXmark} label="Mute" onPress={() => action("mute")} />
         <RemoteButton icon={faVolumeHigh} label="Vol +" onPress={() => action("volumeUp")} />
         <RemoteButton icon={faBackward} label="Prev" onPress={() => action("mediaPrev")} />
-        <RemoteButton icon={faPlay} label="Play/Pause" accent onPress={() => action("mediaPlayPause")} />
+        <RemoteButton icon={faPlay} label="Play" accent onPress={() => action("mediaPlayPause")} />
         <RemoteButton icon={faForward} label="Next" onPress={() => action("mediaNext")} />
       </div>
 
       <h2 className="section-title">Open apps</h2>
-      <div className="row three">
+      <div className="row six">
         {APPS.map((a) => (
           <RemoteButton key={a.id} icon={a.icon} label={a.label} onPress={() => action("openApp", { value: a.id })} />
         ))}
@@ -258,6 +250,6 @@ export default function LaptopPanel() {
           action("searchOpen", { value: name });
         }}
       />
-    </>
+    </div>
   );
 }

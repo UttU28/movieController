@@ -96,33 +96,3 @@ export default function Trackpad({ send, sensitivity }) {
     </div>
   );
 }
-
-export function ScrollStrip({ send }) {
-  const last = useRef(null);
-
-  return (
-    <div
-      className="scroll-strip"
-      aria-label="Scroll"
-      onPointerDown={(e) => {
-        e.preventDefault();
-        e.currentTarget.setPointerCapture(e.pointerId);
-        last.current = e.clientY;
-      }}
-      onPointerMove={(e) => {
-        if (last.current === null) return;
-        const dy = e.clientY - last.current;
-        last.current = e.clientY;
-        if (dy) send({ t: "s", dy: Math.round(dy * SCROLL_GAIN * 1.5) });
-      }}
-      onPointerUp={() => {
-        last.current = null;
-      }}
-      onPointerCancel={() => {
-        last.current = null;
-      }}
-    >
-      <span>scroll</span>
-    </div>
-  );
-}
