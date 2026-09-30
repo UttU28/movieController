@@ -13,6 +13,7 @@ import { buzz } from "./RemoteButton";
 export default function TitleBar({ eyebrow, title, sub, time, progress, placeholder = "Search", onSearch, children }) {
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
+  const lastQuery = useRef("");
   const input = useRef(null);
 
   useEffect(() => {
@@ -21,7 +22,6 @@ export default function TitleBar({ eyebrow, title, sub, time, progress, placehol
 
   const close = () => {
     setSearching(false);
-    setQuery("");
   };
 
   const submit = (e) => {
@@ -29,6 +29,7 @@ export default function TitleBar({ eyebrow, title, sub, time, progress, placehol
     const q = query.trim();
     if (!q) return;
     buzz();
+    lastQuery.current = q;
     onSearch(q);
     close();
   };

@@ -178,6 +178,14 @@ class YouTubeRemote(ChromeApp):
         self.driver.get(href)
         return href
 
+    def _do_openUpNext(self, index=None):
+        """Play recommendation number `index` from the watch page's sidebar."""
+        href = self._js("upNextHref", int(index))
+        if not href:
+            raise ValueError("That recommendation isn't on the page any more")
+        self.driver.get(href)
+        return href
+
     def _do_search(self, query=None):
         query = (query or "").strip()
         if not query:

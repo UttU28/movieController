@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   faArrowLeft,
   faBackwardStep,
@@ -90,9 +90,17 @@ export default function YouTubePanel() {
   const { state, connected, error, action, search, show } = useRemote("youtube");
   const pc = useRemote("laptop", { poll: false });
   const [resultsOpen, setResultsOpen] = useState(false);
+  const [upNextOpen, setUpNextOpen] = useState(false);
   const results = state?.pageType === "search" ? state.results || [] : [];
+  const upNext = state?.pageType === "watch" ? state.upNext || [] : [];
   const player = state?.player;
   useKeyboardRemote(action, KEYS);
+
+  // A new video opens the up-next list, same way Prime opens episodes.
+  const playingTitle = player?.title || null;
+  useEffect(() => {
+    if (playingTitle) setUpNextOpen(true);
+  }, [playingTitle]);
 
   const ready = isReady(connected, state);
   const info = ready ? describe(state) : null;
@@ -109,7 +117,7 @@ export default function YouTubePanel() {
               setResultsOpen(true);
             }}
           >
-            {(player?.canSkipAd || results.length > 0) && (
+            {(player?.canSkipAd || results.length > 0 || upNext.length > 0) && (
               <div className="titlebar-actions">
                 {player?.canSkipAd && (
                   <button type="button" className="pill-btn accent" onClick={() => action("skipAd")}>
@@ -124,6 +132,14 @@ export default function YouTubePanel() {
                     closedLabel={`Show results (${results.length})`}
                   />
                 )}
+                {upNext.length > 0 && (
+                  <SheetToggle
+                    open={upNextOpen}
+                    onToggle={() => setUpNextOpen(!upNextOpen)}
+                    openLabel="Hide up next"
+                    closedLabel={`Up next (${upNext.length})`}
+                  />
+                )}
               </div>
             )}
           </TitleBar>
@@ -134,6 +150,16 @@ export default function YouTubePanel() {
               onOpen={(index) => {
                 setResultsOpen(false);
                 action("openResult", { value: index });
+              }}
+            />
+          </Sheet>
+          <Sheet open={upNextOpen && upNext.length > 0} title="Up next · tap to play" onClose={() => setUpNextOpen(false)}>
+            <ResultList
+              header={false}
+              results={upNext}
+              onOpen={(index) => {
+                setUpNextOpen(false);
+                action("openUpNext", { value: index });
               }}
             />
           </Sheet>

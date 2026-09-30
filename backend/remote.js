@@ -3,7 +3,7 @@
 // (D-pad), plus helpers to read/drive the player. Re-sent on every call and
 // guarded by VERSION, so full page reloads simply reinstall it.
 (() => {
-  const VERSION = 16;
+  const VERSION = 17;
   if (window.__ytr && window.__ytr.version === VERSION) return;
 
   const FOCUS_ATTR = 'data-ytr-focus';
@@ -320,6 +320,40 @@
 
   function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
 
+  // The first recommendations in the watch page's right-hand sidebar.
+  function upNextTiles() {
+    if (pageType() !== 'watch') return [];
+    const root = document.querySelector('#secondary ytd-watch-next-secondary-results-renderer, #secondary');
+    if (!root) return [];
+    return [...root.querySelectorAll('ytd-compact-video-renderer, ytd-compact-radio-renderer, ytd-lockup-renderer')]
+      .filter((el) => {
+        if (isAd(el)) return false;
+        const a = linkOf(el);
+        const href = a ? a.getAttribute('href') || '' : '';
+        return /\/watch\?|\/shorts\/|[?&]list=/.test(href);
+      })
+      .slice(0, MAX_RESULTS);
+  }
+
+  function upNext() {
+    return upNextTiles().map((el, index) => {
+      const a = linkOf(el);
+      const titleEl = el.querySelector('#video-title, .lockup-vm-text, [role="heading"]');
+      const channelEl = el.querySelector('ytd-channel-name #text, #channel-name #text, .metadata-owner, [data-a11y="sb-chip-subscriber-content"]');
+      // Duration badge: plain text node ("12:34") inside #text or a badge-shape.
+      const badgeNodes = [...el.querySelectorAll('#text, badge-shape div, [class*="BadgeShapeText"]')];
+      const badge = badgeNodes.find((n) => /^\d+(:\d\d)+$/.test((n.textContent || '').trim()));
+      return {
+        index,
+        kind: /[?&]list=RD/.test(a.href) ? 'mix' : 'video',
+        title: (titleEl ? titleEl.textContent : '').trim() || a.getAttribute('aria-label') || '',
+        channel: channelEl ? channelEl.textContent.trim() : '',
+        duration: badge ? badge.textContent.trim() : '',
+        href: a.href,
+      };
+    }).filter((r) => r.title);
+  }
+
   const api = {
     version: VERSION,
 
@@ -332,11 +366,17 @@
         focus: describe(current()),
         player: playerState(),
         results: searchResults(),
+        upNext: upNext(),
       };
     },
 
     resultHref(i) {
       const r = searchResults();
+      return r && r[i] ? r[i].href : null;
+    },
+
+    upNextHref(i) {
+      const r = upNext();
       return r && r[i] ? r[i].href : null;
     },
 
