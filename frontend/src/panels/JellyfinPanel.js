@@ -201,8 +201,8 @@ export default function JellyfinPanel() {
       </div>
 
       <div className="row five">
-        <RemoteButton icon={faVolumeLow} label="JF -" onPress={() => { action("volumeDown"); pc.action("volumeDown"); }} />
-        <RemoteButton icon={faVolumeHigh} label="JF +" onPress={() => { action("volumeUp"); pc.action("volumeUp"); }} />
+        <RemoteButton icon={faVolumeLow} label="JF -" onPress={() => action("volumeDown")} />
+        <RemoteButton icon={faVolumeHigh} label="JF +" onPress={() => action("volumeUp")} />
         <RemoteButton
           icon={faClosedCaptioning}
           label="Subtitles"

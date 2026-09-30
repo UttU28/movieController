@@ -32,12 +32,7 @@ export default function PlayerDock({ player, action }) {
     <div className="dock">
       <DockButton icon={faVolumeLow} label="PC volume down" tag="PC" onPress={() => pc.action("volumeDown")} />
       <DockButton icon={faRotateLeft} label="Back 10 seconds" tag="10" onPress={() => action("seekBack")} />
-      <DockButton
-        icon={playing ? faPause : faPlay}
-        label={playing ? "Pause" : "Play"}
-        main
-        onPress={() => { action("playPause"); pc.action("mediaPlayPause"); }}
-      />
+      <DockButton icon={playing ? faPause : faPlay} label={playing ? "Pause" : "Play"} main onPress={() => action("playPause")} />
       <DockButton icon={faRotateRight} label="Forward 10 seconds" tag="10" onPress={() => action("seekForward")} />
       <DockButton icon={faVolumeHigh} label="PC volume up" tag="PC" onPress={() => pc.action("volumeUp")} />
     </div>

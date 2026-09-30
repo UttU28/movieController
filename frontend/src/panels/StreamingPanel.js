@@ -146,8 +146,8 @@ export default function StreamingPanel({ app, appName, audioLabel, pageLabels, s
       </div>
 
       <div className="row five">
-        <RemoteButton icon={faVolumeLow} label={`${audioLabel} -`} onPress={() => { action("volumeDown"); pc.action("volumeDown"); }} />
-        <RemoteButton icon={faVolumeHigh} label={`${audioLabel} +`} onPress={() => { action("volumeUp"); pc.action("volumeUp"); }} />
+        <RemoteButton icon={faVolumeLow} label={`${audioLabel} -`} onPress={() => action("volumeDown")} />
+        <RemoteButton icon={faVolumeHigh} label={`${audioLabel} +`} onPress={() => action("volumeUp")} />
         <RemoteButton icon={faClosedCaptioning} label="Subtitles" onPress={() => action("subtitles")} />
         <RemoteButton icon={faExpand} label="Full" active={!!player?.fullscreen} onPress={() => action("fullscreen")} />
         <RemoteButton
