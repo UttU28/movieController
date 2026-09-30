@@ -131,9 +131,64 @@ if ($Role -eq 'supervisor') {
 
   $fail = @{ backend = 0; frontend = 0 }
   $tick = [datetime]::UtcNow
+  $gitTick = 0          # counter for the 30s git-check cycle
+  $needRestart = $false  # set true when git pull fetched changes
   try {
     while ($true) {
       Start-Sleep -Seconds 5
+      $gitTick++
+
+      # Every 30 seconds (6 × 5s): fetch, then pull and restart if remote changed.
+      if ($gitTick -ge 6) {
+        $gitTick = 0
+        try {
+          Push-Location $Root
+          Write-Log 'supervisor.log' 'Checking for git updates…'
+
+          # Always fetch from remote.
+          $out = & git fetch --quiet 2>&1 | ForEach-Object { "$_" }
+          foreach ($line in $out) { if ($line) { Write-Log 'supervisor.log' $line } }
+
+          # Compare remote HEAD with local HEAD to see if there is new code.
+          $localHash = & git rev-parse HEAD 2>$null
+          $remoteHash = & git rev-parse @{u} 2>$null
+          Pop-Location
+
+          if ($localHash -ne $remoteHash -and $remoteHash) {
+            Write-Log 'supervisor.log' "Update available ($remoteHash). Closing Chrome and servers, then pulling…"
+            # Close the Chrome window opened by the backend (close all Chrome instances).
+            try { & taskkill.exe /IM chrome.exe /F 2>$null | Out-Null } catch {}
+            # Shut down backend and frontend.
+            Stop-Logged 'backend'
+            Stop-Logged 'frontend'
+            # Wait for ports to free up, then pull.
+            Start-Sleep -Seconds 5
+            $needRestart = $true
+          }
+        } catch {
+          Write-Log 'supervisor.log' "Git check failed: $_"
+        }
+      }
+
+      if ($needRestart) {
+        Write-Log 'supervisor.log' 'Pulling latest and restarting…'
+        try {
+          Push-Location $Root
+          $out = & git pull --ff-only 2>&1 | ForEach-Object { "$_" }
+          foreach ($line in $out) { Write-Log 'supervisor.log' $line }
+        } catch {
+          Write-Log 'supervisor.log' "git pull failed: $_. Starting anyway."
+        } finally {
+          Pop-Location
+        }
+        $needRestart = $false
+        Start-Sleep -Seconds 3
+        Start-RoleWindow 'backend'
+        Start-RoleWindow 'frontend'
+        Write-Log 'supervisor.log' 'Restarted both servers with latest code'
+        continue
+      }
+
       $now = [datetime]::UtcNow
       $gap = ($now - $tick).TotalSeconds
       $tick = $now
