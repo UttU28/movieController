@@ -331,7 +331,9 @@ while ($true) {
     while ($queue.TryDequeue([ref]$item)) { Write-Log "$Role.log" $item }
     Start-Sleep -Milliseconds 200
   }
-  $proc.WaitForExit()
+  # Don't wait forever for the output pipe: a leftover child (chromedriver)
+  # can hold it open after the server itself has exited.
+  [void]$proc.WaitForExit(3000)
   Start-Sleep -Milliseconds 300
   $item = $null
   while ($queue.TryDequeue([ref]$item)) { Write-Log "$Role.log" $item }

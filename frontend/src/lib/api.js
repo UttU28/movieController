@@ -26,6 +26,13 @@ export const errorMessage = (err) =>
 
 export const getMode = async () => (await client.get(`${baseUrl()}/mode`)).data;
 
+// QR page theme only (day / night / live); doesn't touch playback or tabs.
 export const setMode = async (mode) => (await client.post(`${baseUrl()}/mode`, { mode })).data;
 
-export const pauseAll = async () => (await client.post(`${baseUrl()}/pause-all`)).data;
+// Power off pauses playback and switches Chrome to the QR page; on just
+// brings the phone's controls back.
+export const setPower = async (on) => (await client.post(`${baseUrl()}/power`, { on })).data;
+
+// Chrome fullscreen on / off without switching tabs.
+export const toggleTv = async () => (await client.post(`${baseUrl()}/tv`)).data;
+

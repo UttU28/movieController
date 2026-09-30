@@ -1,46 +1,38 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPowerOff } from "@fortawesome/free-solid-svg-icons";
 import AppSwitcher, { APPS } from "../components/AppSwitcher";
-import ModePicker from "../components/ModePicker";
-import { showApp } from "../lib/api";
+import PowerScreen from "../components/PowerScreen";
+import { buzz } from "../components/RemoteButton";
+import { getMode, setMode, setPower, showApp, toggleTv } from "../lib/api";
 import usePcVolumeKeys from "../lib/usePcVolumeKeys";
 import JellyfinPanel from "../panels/JellyfinPanel";
 import LaptopPanel from "../panels/LaptopPanel";
 import NetflixPanel from "../panels/NetflixPanel";
-import NoiseCanvas from "../components/NoiseCanvas";
 import PrimePanel from "../panels/PrimePanel";
 import YouTubePanel from "../panels/YouTubePanel";
 
 const APP_KEY = "remote.app";
-const MODE_KEY = "remote.mode";
 const WEB_APPS = new Set(["youtube", "prime", "netflix", "jellyfin"]);
 const THEME_COLORS = { laptop: "#0d0e12", youtube: "#0f0f0f", prime: "#0b1219", netflix: "#141414", jellyfin: "#0e1116" };
-const MODE_THEMES = { day: "#0f0f0f", night: "#000000", live: "#0a0a0a" };
+const POLL_MS = 4000;
 
 export default function Home() {
   const [app, setApp] = useState(null);
-  const [mode, setModeState] = useState("day");
-  const [showPicker, setShowPicker] = useState(false);
+  // Shared with the backend (and every other phone): power + QR theme.
+  const [remote, setRemote] = useState({ power: "on", mode: "day", tvMode: false });
+  const [busy, setBusy] = useState(false);
   usePcVolumeKeys();
 
-  // Restore the last app and mode on mount (without switching Chrome's tab).
+  // Restore the last app, without switching Chrome's tab on page load.
   useEffect(() => {
-    let savedApp = null;
-    let savedMode = null;
-    try { savedApp = localStorage.getItem(APP_KEY); } catch {}
-    try { savedMode = localStorage.getItem(MODE_KEY); } catch {}
-    const appOk = APPS.some((a) => a.id === savedApp);
-    const modeOk = ["day", "night", "live"].includes(savedMode);
-    if (appOk) setApp(savedApp);
-    else setApp("laptop");
-    if (modeOk) {
-      setModeState(savedMode);
-      document.body.dataset.mode = savedMode;
-      document.title = savedMode === "night" ? "Remote — Night" : savedMode === "live" ? "Remote — Live" : "Remote";
-    }
+    let saved = null;
+    try {
+      saved = localStorage.getItem(APP_KEY);
+    } catch {}
+    setApp(APPS.some((a) => a.id === saved) ? saved : "laptop");
   }, []);
 
   useEffect(() => {
@@ -49,49 +41,78 @@ export default function Home() {
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLORS[app]);
   }, [app]);
 
+  // Keep power / theme in step with the backend (another phone may change it).
+  const refresh = useCallback(async () => {
+    try {
+      setRemote(await getMode());
+    } catch {}
+  }, []);
+
   useEffect(() => {
-    try { localStorage.setItem(MODE_KEY, mode); } catch {}
-    document.body.dataset.mode = mode;
-    document.title = mode === "night" ? "Remote — Night" : mode === "live" ? "Remote — Live" : "Remote";
-    if (mode === "night" || mode === "live") {
-      document.querySelector('meta[name="theme-color"]')?.setAttribute("content", MODE_THEMES[mode]);
+    refresh();
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, POLL_MS);
+    return () => clearInterval(timer);
+  }, [refresh]);
+
+  const run = async (fn, optimistic) => {
+    if (optimistic) setRemote((r) => ({ ...r, ...optimistic }));
+    setBusy(true);
+    try {
+      setRemote(await fn());
+    } catch {
+      refresh();
+    } finally {
+      setBusy(false);
     }
-  }, [mode]);
+  };
 
   const choose = (next) => {
     setApp(next);
-    try { localStorage.setItem(APP_KEY, next); } catch {}
+    try {
+      localStorage.setItem(APP_KEY, next);
+    } catch {}
+    // Picking a web app also switches Chrome to its tab.
     if (WEB_APPS.has(next)) showApp(next).catch(() => {});
   };
 
-  const togglePicker = () => setShowPicker((p) => !p);
+  const powerOff = () => {
+    buzz();
+    run(() => setPower(false), { power: "off" });
+  };
 
-  // Live mode: render the noise canvas behind everything.
-  const liveBg = mode === "live" && <NoiseCanvas />;
+  if (remote.power === "off") {
+    return (
+      <main className="remote">
+        <PowerScreen
+          mode={remote.mode}
+          tvMode={remote.tvMode}
+          busy={busy}
+          onPowerOn={() => run(() => setPower(true), { power: "on" })}
+          onTheme={(mode) => run(() => setMode(mode), { mode })}
+          onFullscreen={() => run(toggleTv)}
+        />
+      </main>
+    );
+  }
 
   return (
-    <>
-      {liveBg}
-      <main className="remote">
-        <header className="topbar">
-          {showPicker ? (
-            <ModePicker onBack={() => setShowPicker(false)} />
-          ) : (
-            <div className="topbar-inner">
-              {app !== null && <AppSwitcher app={app} onChange={choose} />}
-              <button type="button" className="power-btn" aria-label="Power" onClick={togglePicker}>
-                <FontAwesomeIcon icon={faPowerOff} />
-              </button>
-            </div>
-          )}
-        </header>
+    <main className="remote">
+      <header className="topbar">
+        <div className="topbar-inner">
+          {app && <AppSwitcher app={app} onChange={choose} />}
+          <button type="button" className="power-btn" aria-label="Turn the remote off" onClick={powerOff}>
+            <FontAwesomeIcon icon={faPowerOff} />
+          </button>
+        </div>
+      </header>
 
-        {app === "laptop" && <LaptopPanel />}
-        {app === "youtube" && <YouTubePanel />}
-        {app === "prime" && <PrimePanel />}
-        {app === "netflix" && <NetflixPanel />}
-        {app === "jellyfin" && <JellyfinPanel />}
-      </main>
-    </>
+      {app === "laptop" && <LaptopPanel />}
+      {app === "youtube" && <YouTubePanel />}
+      {app === "prime" && <PrimePanel />}
+      {app === "netflix" && <NetflixPanel />}
+      {app === "jellyfin" && <JellyfinPanel />}
+    </main>
   );
 }

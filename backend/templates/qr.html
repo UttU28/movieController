@@ -3,248 +3,225 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#0d0e12">
 <title>Remote QR</title>
 <style>
+  /* Three looks for the idle screen, picked on the phone's power screen:
+     day   light and clean
+     night near-black and dim, for a dark room
+     live  a slow, soft colour drift behind a glass card */
   :root {
-    --bg: #0d0e12;
-    --surface: #181a21;
-    --surface-2: #242733;
-    --line: #2d3040;
-    --text: #f1f1f1;
-    --muted: #9a9aa0;
-    --accent: #7c5cff;
+    --bg: #f3f3f6;
+    --card: #ffffff;
+    --line: #e2e2e8;
+    --text: #17171b;
+    --muted: #5c5c66;
+    --accent: #6d4bff;
+    --qr-dim: 1;
+    --shadow: 0 30px 80px rgba(20, 20, 40, 0.12);
   }
+  [data-mode="night"] {
+    --bg: #000;
+    --card: #050505;
+    --line: #111;
+    --text: #6e6e74;
+    --muted: #3c3c42;
+    --accent: #3a3a44;
+    --qr-dim: 0.55;
+    --shadow: none;
+  }
+  [data-mode="live"] {
+    --bg: #07070c;
+    --card: rgba(18, 18, 28, 0.55);
+    --line: rgba(255, 255, 255, 0.08);
+    --text: #e6e6ee;
+    --muted: #8a8a99;
+    --accent: #8b6dff;
+    --qr-dim: 0.9;
+    --shadow: 0 30px 90px rgba(0, 0, 0, 0.55);
+  }
+
   * { box-sizing: border-box; }
   html, body {
     margin: 0;
-    min-height: 100%;
-    background:
-      radial-gradient(820px 380px at 50% -8%, rgba(124, 92, 255, 0.28), transparent 62%),
-      var(--bg);
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
     color: var(--text);
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    transition: background 0.6s, color 0.6s;
   }
+
+  /* Live: three blurred colour fields drifting very slowly. */
+  .aurora {
+    position: fixed;
+    inset: -20%;
+    z-index: 0;
+    opacity: 0;
+    transition: opacity 0.8s;
+    pointer-events: none;
+  }
+  [data-mode="live"] .aurora { opacity: 1; }
+  .aurora span {
+    position: absolute;
+    width: 55vmax;
+    height: 55vmax;
+    border-radius: 50%;
+    filter: blur(90px);
+    opacity: 0.32;
+    animation: drift 38s ease-in-out infinite alternate;
+  }
+  .aurora span:nth-child(1) { background: #6d4bff; left: 5%; top: 10%; }
+  .aurora span:nth-child(2) { background: #00a4dc; right: 5%; top: 25%; animation-duration: 46s; animation-delay: -12s; }
+  .aurora span:nth-child(3) { background: #e0336b; left: 30%; bottom: 0; animation-duration: 54s; animation-delay: -24s; opacity: 0.22; }
+  @keyframes drift {
+    from { transform: translate(0, 0) scale(1); }
+    to   { transform: translate(8vmax, -6vmax) scale(1.15); }
+  }
+  @media (prefers-reduced-motion: reduce) { .aurora span { animation: none; } }
+
   main {
-    min-height: 100vh;
+    position: relative;
+    z-index: 1;
+    height: 100%;
     display: grid;
     place-items: center;
-    padding: 28px 16px;
+    padding: 24px;
   }
-  .panel {
-    width: min(420px, 100%);
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 24px;
-    padding: 22px 18px 16px;
+  .stack {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 14px;
-    text-align: center;
-    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+    gap: 22px;
+  }
+
+  /* Clock: dim and large when idle (night / live), hidden in day. */
+  .clock {
+    display: none;
+    font-weight: 200;
+    font-size: clamp(56px, 11vmin, 132px);
+    letter-spacing: -0.03em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+  }
+  .date {
+    display: none;
+    margin-top: -12px;
+    font-size: 0.95rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  [data-mode="night"] .clock, [data-mode="live"] .clock,
+  [data-mode="night"] .date, [data-mode="live"] .date { display: block; }
+
+  .card {
+    display: flex;
+    align-items: center;
+    gap: 26px;
+    padding: 22px 26px 22px 22px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 28px;
+    box-shadow: var(--shadow);
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+    transition: background 0.6s, border-color 0.6s, box-shadow 0.6s;
+  }
+  .qr {
+    flex: none;
+    background: #fff;
+    padding: 10px;
+    border-radius: 18px;
+    line-height: 0;
+    filter: brightness(var(--qr-dim));
+    transition: filter 0.6s;
+  }
+  .qr svg {
+    display: block;
+    width: clamp(170px, 26vmin, 260px);
+    height: auto;
+  }
+  .text {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 280px;
   }
   .eyebrow {
     margin: 0;
     font-size: 0.72rem;
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: #fff;
-    background: var(--accent);
-    border-radius: 999px;
-    padding: 4px 12px;
+    color: var(--accent);
   }
   h1 {
     margin: 0;
-    font-size: 1.45rem;
+    font-size: 1.7rem;
+    font-weight: 700;
     letter-spacing: -0.02em;
   }
-  .qr {
-    background: #fff;
-    padding: 12px;
-    border-radius: 18px;
-    line-height: 0;
-  }
-  .qr svg {
-    display: block;
-    width: min(280px, 64vw);
-    height: auto;
-  }
-  .url {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--surface-2);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 6px 6px 6px 14px;
-  }
-  .url a {
-    flex: 1;
-    min-width: 0;
-    color: #fff;
-    text-decoration: none;
-    font: 600 0.92rem ui-monospace, Consolas, monospace;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    text-align: left;
-  }
-  .url button {
-    flex: none;
-    border: 0;
-    background: var(--accent);
-    color: #fff;
-    font: 700 0.78rem inherit;
-    border-radius: 9px;
-    padding: 8px 12px;
-    cursor: pointer;
-  }
-  .url button:active { filter: brightness(1.1); }
   p {
     margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
     color: var(--muted);
-    font-size: 0.88rem;
-    line-height: 1.45;
   }
-  .apps {
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 6px;
-    margin: 0;
-    padding: 5px;
-    list-style: none;
-    background: #12141a;
-    border: 1px solid var(--line);
-    border-radius: 16px;
+  .url {
+    font: 600 0.9rem ui-monospace, Consolas, monospace;
+    color: var(--text);
+    opacity: 0.8;
+    word-break: break-all;
   }
-  .apps li {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    padding: 8px 0 6px;
-    border-radius: 12px;
-    color: #fff;
-    font-size: 0.68rem;
-    font-weight: 700;
-  }
-  .apps svg { width: 18px; height: 18px; display: block; }
-  .laptop { background: #7c5cff; }
-  .youtube { background: #ff0033; }
-  .prime { background: #1a98ff; }
-  .netflix { background: #e50914; }
+  [data-mode="night"] h1 { font-weight: 500; }
 
-  /* ---------- Night mode: minimal, near-black ---------- */
-  [data-mode="night"] html,
-  [data-mode="night"] body {
-    background: #000;
-    color: #ccc;
-  }
-  [data-mode="night"] .panel {
-    background: #0a0a0a;
-    border-color: #1a1a1a;
-    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.9);
-  }
-  [data-mode="night"] .panel h1 {
-    color: #ddd;
-  }
-  [data-mode="night"] .eyebrow {
-    background: #333;
-  }
-  [data-mode="night"] .url {
-    background: #111;
-    border-color: #222;
-  }
-  [data-mode="night"] .url a {
-    color: #aaa;
-  }
-  [data-mode="night"] .url button {
-    background: #333;
-  }
-  [data-mode="night"] p {
-    color: #555;
-  }
-  [data-mode="night"] .apps {
-    background: #0a0a0a;
-    border-color: #1a1a1a;
-  }
-
-  /* ---------- Live mode: noise canvas background ---------- */
-  [data-mode="live"] body {
-    overflow: hidden;
-  }
-  [data-mode="live"] main {
-    position: relative;
-    z-index: 1;
-  }
-  #noise-canvas {
-    position: fixed;
-    inset: 0;
-    z-index: 0;
-    opacity: 0.08;
-    pointer-events: none;
-    filter: blur(1px);
-  }
-
-  /* Noise grain animation */
-  @keyframes noise {
-    0%   { background-position: 0 0; }
-    25%  { background-position: -10% 15%; }
-    50%  { background-position: 15% -10%; }
-    75%  { background-position: -15% -5%; }
-    100% { background-position: 10% 10%; }
+  @media (max-width: 640px) {
+    .card { flex-direction: column; text-align: center; padding: 22px; }
+    .text { align-items: center; }
   }
 </style>
 </head>
 <body>
+<div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
 <main>
-  <section class="panel">
-    <p class="eyebrow">Phone remote</p>
-    <h1>Scan to open</h1>
-    <div class="qr">{{QR}}</div>
-    <div class="url">
-      <a id="url" href="{{URL}}">{{URL}}</a>
-      <button type="button" id="copy">Copy</button>
-    </div>
-    <p>Point your phone camera at the code. The phone has to be on the same Wi-Fi.</p>
-    <ul class="apps">
-      <li class="laptop">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5V15H4V5.5zM2 17.5A1.5 1.5 0 0 0 3.5 19h17a1.5 1.5 0 0 0 1.5-1.5V16H2v1.5z"/></svg>
-        Laptop
-      </li>
-      <li class="youtube">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M23 12.2s0-3.2-.4-4.6c-.2-.9-.9-1.6-1.8-1.8C19.2 5.4 12 5.4 12 5.4s-7.2 0-8.8.4c-.9.2-1.6.9-1.8 1.8C1 9 1 12.2 1 12.2s0 3.2.4 4.6c.2.9.9 1.6 1.8 1.8 1.6.4 8.8.4 8.8.4s7.2 0 8.8-.4c.9-.2 1.6-.9 1.8-1.8.4-1.4.4-4.6.4-4.6zM9.8 15.5v-6.6l6.2 3.3-6.2 3.3z"/></svg>
-        YouTube
-      </li>
-      <li class="prime">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M4 9.5c2.4 3.4 5.4 5 8 5s5.6-1.6 8-5"/><path fill="currentColor" d="M16.2 14.2l3.2-1.6.2 3.4-3.4-1.8z"/></svg>
-        Prime
-      </li>
-      <li class="netflix">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 3h4.2l5.6 12.2V3H19v18h-4.2L9.2 8.8V21H5V3z"/></svg>
-        Netflix
-      </li>
-    </ul>
-  </section>
+  <div class="stack">
+    <div class="clock" id="clock">--:--</div>
+    <div class="date" id="date"></div>
+    <section class="card">
+      <div class="qr">{{QR}}</div>
+      <div class="text">
+        <p class="eyebrow">Phone remote</p>
+        <h1>Scan to control</h1>
+        <p>Point your phone camera at the code. Same Wi-Fi as this PC.</p>
+        <div class="url">{{URL}}</div>
+      </div>
+    </section>
+  </div>
 </main>
 <script>
-  document.getElementById("copy").addEventListener("click", async () => {
-    const button = document.getElementById("copy");
-    const url = document.getElementById("url").textContent;
+  // Clock (only visible in night / live).
+  const clock = document.getElementById("clock");
+  const date = document.getElementById("date");
+  function tick() {
+    const now = new Date();
+    clock.textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    date.textContent = now.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" });
+  }
+  tick();
+  setInterval(tick, 15000);
+
+  // Follow the theme picked on the phone, without reloading.
+  async function followMode() {
     try {
-      await navigator.clipboard.writeText(url);
-    } catch (err) {
-      return;
-    }
-    button.textContent = "Copied";
-    setTimeout(() => { button.textContent = "Copy"; }, 1400);
-  });
-{{NOISE_SCRIPT}}
-</script>
+      const res = await fetch("/mode", { cache: "no-store" });
+      const { mode } = await res.json();
+      if (mode && document.documentElement.dataset.mode !== mode) {
+        document.documentElement.dataset.mode = mode;
+      }
+    } catch (e) {}
+  }
+  setInterval(followMode, 2500);
 </script>
 </body>
 </html>

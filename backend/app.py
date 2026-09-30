@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 import json
 import os
 import threading
@@ -34,8 +35,20 @@ CORS_ORIGINS = [
 ]
 
 session = ChromeSession()
-# Global mode state for the QR page / phone UI.
-MODE_STATE: dict = {"mode": "day"}
+# Power + QR-page theme, shared by every phone and the QR page itself.
+# power: "on" = phone shows the controls; "off" = playback paused, Chrome on
+#        the QR page, phone shows only the power screen.
+# mode:  QR page theme when idle: "day" (light), "night" (dark), "live".
+MODE_STATE: dict = {"power": "on", "mode": "day"}
+MODES = ("day", "night", "live")
+# The theme survives restarts; power always starts "on".
+THEME_FILE = Path(__file__).resolve().parent / "qr_theme.txt"
+try:
+    _saved_theme = THEME_FILE.read_text(encoding="utf-8").strip()
+    if _saved_theme in MODES:
+        MODE_STATE["mode"] = _saved_theme
+except OSError:
+    pass
 
 web_apps = {
     "youtube": YouTubeRemote(session),
@@ -118,8 +131,9 @@ def health():
 
 @app.get("/qr", response_class=HTMLResponse)
 def qr(mode: str = ""):
-    """QR code for the phone remote's URL, themed to match the selected mode."""
-    return qr_page.render(mode)
+    """QR code for the phone remote's URL, in the selected theme. The page
+    polls /mode and follows theme changes without reloading."""
+    return qr_page.render(mode if mode in MODES else MODE_STATE["mode"])
 
 
 @app.get("/state")
@@ -135,25 +149,61 @@ def screenshot(app: str = "youtube"):
     return Response(content=png, media_type="image/png", headers={"Cache-Control": "no-store"})
 
 
+def _mode_state():
+    with session.lock:
+        tv = False
+        try:
+            if session.connect(launch=False):
+                tv = session.tv_mode
+        except Exception:
+            pass
+    return {**MODE_STATE, "tvMode": tv}
+
+
 @app.get("/mode")
 def get_mode():
-    """Current UI mode (day / night / live)."""
-    return MODE_STATE
+    """Power state, QR theme, and whether Chrome is fullscreen."""
+    return _mode_state()
 
 
 @app.post("/mode")
 async def set_mode(request: Request):
-    """Switch UI mode. night / live pauses all playback and opens the QR tab."""
+    """Change the QR page theme only. Doesn't touch playback or tabs; the QR
+    page picks the new theme up by itself."""
     data = await request.json()
     mode = (data.get("mode") or "day").lower()
-    if mode not in ("day", "night", "live"):
+    if mode not in MODES:
         raise HTTPException(status_code=400, detail=f"Unknown mode '{mode}'")
     MODE_STATE["mode"] = mode
-    if mode in ("night", "live"):
+    try:
+        THEME_FILE.write_text(mode, encoding="utf-8")
+    except OSError:
+        pass
+    return await asyncio.to_thread(_mode_state)
+
+
+@app.post("/power")
+async def set_power(request: Request):
+    """Power off: pause playback and switch Chrome to the QR page. Power on:
+    just bring the phone's controls back; Chrome stays on the QR page."""
+    data = await request.json()
+    on = bool(data.get("on"))
+    MODE_STATE["power"] = "on" if on else "off"
+    if not on:
         # These drive Chrome (blocking), so keep them off the event loop.
         await asyncio.to_thread(_pause_all_playback)
-        await asyncio.to_thread(_switch_to_qr, mode)
-    return MODE_STATE
+        await asyncio.to_thread(_switch_to_qr)
+    return await asyncio.to_thread(_mode_state)
+
+
+@app.post("/tv")
+def toggle_tv():
+    """Toggle Chrome fullscreen without switching tabs (for the QR page)."""
+    with session.lock:
+        if not session.connect(launch=False):
+            raise HTTPException(status_code=409, detail="Chrome isn't running")
+        session.toggle_tv_mode()
+    return _mode_state()
 
 
 @app.post("/pause-all")
@@ -190,16 +240,17 @@ def _pause_all_playback():
                 print(f"pause {name} failed: {e}")
 
 
-def _switch_to_qr(mode=""):
-    """Open/activate the QR tab (with optional mode param) and bring it to front."""
+def _switch_to_qr():
+    """Activate the QR tab (opening it if needed) and bring Chrome forward."""
     with session.lock:
         if not session.connect(launch=False):
             return
         qr_url = f"http://127.0.0.1:{PORT}/qr"
-        if mode:
-            qr_url += f"?mode={mode}"
         try:
             session.use_tab((f":{PORT}/qr",), qr_url)
+            # Reload so the screen always has the latest QR page (it may have
+            # been open since before an update).
+            session.driver.refresh()
             session.bring_to_front()
         except Exception as e:
             print(f"switch to QR failed: {e}")
