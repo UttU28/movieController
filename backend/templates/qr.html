@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0d0e12">
+<title>Remote QR</title>
+<style>
+  :root {
+    --bg: #0d0e12;
+    --surface: #181a21;
+    --surface-2: #242733;
+    --line: #2d3040;
+    --text: #f1f1f1;
+    --muted: #9a9aa0;
+    --accent: #7c5cff;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    min-height: 100%;
+    background:
+      radial-gradient(820px 380px at 50% -8%, rgba(124, 92, 255, 0.28), transparent 62%),
+      var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 28px 16px;
+  }
+  .panel {
+    width: min(420px, 100%);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    padding: 22px 18px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    text-align: center;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+  }
+  .eyebrow {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #fff;
+    background: var(--accent);
+    border-radius: 999px;
+    padding: 4px 12px;
+  }
+  h1 {
+    margin: 0;
+    font-size: 1.45rem;
+    letter-spacing: -0.02em;
+  }
+  .qr {
+    background: #fff;
+    padding: 12px;
+    border-radius: 18px;
+    line-height: 0;
+  }
+  .qr svg {
+    display: block;
+    width: min(280px, 64vw);
+    height: auto;
+  }
+  .url {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 6px 6px 6px 14px;
+  }
+  .url a {
+    flex: 1;
+    min-width: 0;
+    color: #fff;
+    text-decoration: none;
+    font: 600 0.92rem ui-monospace, Consolas, monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+  }
+  .url button {
+    flex: none;
+    border: 0;
+    background: var(--accent);
+    color: #fff;
+    font: 700 0.78rem inherit;
+    border-radius: 9px;
+    padding: 8px 12px;
+    cursor: pointer;
+  }
+  .url button:active { filter: brightness(1.1); }
+  p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.88rem;
+    line-height: 1.45;
+  }
+  .apps {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin: 0;
+    padding: 5px;
+    list-style: none;
+    background: #12141a;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+  }
+  .apps li {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 0 6px;
+    border-radius: 12px;
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 700;
+  }
+  .apps svg { width: 18px; height: 18px; display: block; }
+  .laptop { background: #7c5cff; }
+  .youtube { background: #ff0033; }
+  .prime { background: #1a98ff; }
+  .netflix { background: #e50914; }
+</style>
+</head>
+<body>
+<main>
+  <section class="panel">
+    <p class="eyebrow">Phone remote</p>
+    <h1>Scan to open</h1>
+    <div class="qr">{{QR}}</div>
+    <div class="url">
+      <a id="url" href="{{URL}}">{{URL}}</a>
+      <button type="button" id="copy">Copy</button>
+    </div>
+    <p>Point your phone camera at the code. The phone has to be on the same Wi-Fi.</p>
+    <ul class="apps">
+      <li class="laptop">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5V15H4V5.5zM2 17.5A1.5 1.5 0 0 0 3.5 19h17a1.5 1.5 0 0 0 1.5-1.5V16H2v1.5z"/></svg>
+        Laptop
+      </li>
+      <li class="youtube">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M23 12.2s0-3.2-.4-4.6c-.2-.9-.9-1.6-1.8-1.8C19.2 5.4 12 5.4 12 5.4s-7.2 0-8.8.4c-.9.2-1.6.9-1.8 1.8C1 9 1 12.2 1 12.2s0 3.2.4 4.6c.2.9.9 1.6 1.8 1.8 1.6.4 8.8.4 8.8.4s7.2 0 8.8-.4c.9-.2 1.6-.9 1.8-1.8.4-1.4.4-4.6.4-4.6zM9.8 15.5v-6.6l6.2 3.3-6.2 3.3z"/></svg>
+        YouTube
+      </li>
+      <li class="prime">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M4 9.5c2.4 3.4 5.4 5 8 5s5.6-1.6 8-5"/><path fill="currentColor" d="M16.2 14.2l3.2-1.6.2 3.4-3.4-1.8z"/></svg>
+        Prime
+      </li>
+      <li class="netflix">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 3h4.2l5.6 12.2V3H19v18h-4.2L9.2 8.8V21H5V3z"/></svg>
+        Netflix
+      </li>
+    </ul>
+  </section>
+</main>
+<script>
+  document.getElementById("copy").addEventListener("click", async () => {
+    const button = document.getElementById("copy");
+    const url = document.getElementById("url").textContent;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch (err) {
+      return;
+    }
+    button.textContent = "Copied";
+    setTimeout(() => { button.textContent = "Copy"; }, 1400);
+  });
+</script>
+</body>
+</html>

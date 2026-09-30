@@ -1,146 +1,198 @@
+import asyncio
+import json
 import os
+import threading
+from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
-import pyautogui
+from selenium.common.exceptions import WebDriverException
 
 load_dotenv()
 
+from chrome_session import ChromeSession
+from jellyfin_remote import JellyfinRemote
+from laptop import LaptopControl
+from netflix_remote import NetflixRemote
+import qr_page
+from prime_remote import PrimeRemote
+from tab_keeper import TabKeeper
+from youtube_remote import YouTubeRemote
+
 HOST = os.getenv("HOST", "0.0.0.0")
-PORT = int(os.getenv("PORT", "9281"))
-RELOAD = os.getenv("RELOAD", "true").lower() in ("1", "true", "yes")
+PORT = int(os.getenv("PORT", "9282"))
+RELOAD = os.getenv("RELOAD", "false").lower() in ("1", "true", "yes")
+LAUNCH_ON_START = os.getenv("LAUNCH_ON_START", "true").lower() in ("1", "true", "yes")
 CORS_ORIGINS = [
     origin.strip()
     for origin in os.getenv("CORS_ORIGINS", "*").split(",")
     if origin.strip()
 ]
 
-from utils.fMoviesFunctions import *
-from utils.googleChromeFunctions import *
-from utils.homeFunctions import *
-from utils.hotKeys import *
-from utils.iBommaFunctions import *
-from utils.netflixFunctions import *
-from utils.primeVideosFunctions import *
-from utils.youTubeFunctions import *
+session = ChromeSession()
+web_apps = {
+    "youtube": YouTubeRemote(session),
+    "prime": PrimeRemote(session),
+    "netflix": NetflixRemote(session),
+    "jellyfin": JellyfinRemote(session),
+}
+laptop = LaptopControl()
 
-app = FastAPI()
+# The remote's Chrome tabs, in the order they're kept: (name, home URL, URL marker).
+keeper = TabKeeper(session, [
+    ("youtube", web_apps["youtube"].HOME_URL, "youtube.com"),
+    ("prime", web_apps["prime"].HOME_URL, "primevideo.com"),
+    ("netflix", web_apps["netflix"].HOME_URL, "netflix.com"),
+    ("jellyfin", web_apps["jellyfin"].HOME_URL, web_apps["jellyfin"].HOSTS[0]),
+    ("qr", f"http://127.0.0.1:{PORT}/qr", f":{PORT}/qr"),
+])
+
+
+@asynccontextmanager
+async def lifespan(app):
+    if LAUNCH_ON_START:
+        # Attach to (or start) Chrome in the background so the API is up
+        # immediately. This doesn't bring Chrome to the front.
+        threading.Thread(target=_safe_connect, daemon=True).start()
+    keeper.start()
+    yield
+    keeper.stop()
+    with session.lock:
+        session.teardown()
+
+
+def _safe_connect():
+    try:
+        with session.lock:
+            session.connect(launch=True)
+            keeper.check()
+    except Exception as e:
+        print(f"Chrome launch failed: {e}")
+    print(f"Phone remote: {qr_page.remote_url()}  (QR code at http://127.0.0.1:{PORT}/qr)")
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS if CORS_ORIGINS != ["*"] else ["*"],
-    allow_credentials=True,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=CORS_ORIGINS != ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
+def _web_app(name):
+    remote = web_apps.get(name or "youtube")
+    if remote is None:
+        raise HTTPException(status_code=400, detail=f"Unknown app '{name}'")
+    return remote
+
+
 @app.get("/")
-async def health():
-    return {"status": "ok", "message": "Movie Controller API is running"}
+def health():
+    return {"status": "ok", "message": "Remote API is running", "apps": ["laptop", *web_apps]}
 
-@app.post("/move")
-async def move_mouse(request: Request):
+
+@app.get("/qr", response_class=HTMLResponse)
+def qr():
+    """QR code for the phone remote's URL."""
+    return qr_page.render()
+
+
+@app.get("/state")
+def get_state(app: str = "youtube"):
+    return _web_app(app).state()
+
+
+@app.get("/screenshot")
+def screenshot(app: str = "youtube"):
+    png = _web_app(app).screenshot()
+    if png is None:
+        raise HTTPException(status_code=409, detail="Browser is not running")
+    return Response(content=png, media_type="image/png", headers={"Cache-Control": "no-store"})
+
+
+@app.post("/app")
+async def switch_app(request: Request):
+    """Called when you pick an app on the phone: Chrome switches to (or opens)
+    that app's tab and comes to the front. Laptop needs nothing."""
     data = await request.json()
-    dx = data.get("dx", 0)
-    dy = data.get("dy", 0)
-    print(f"Received move request: {data}")
-    pyautogui.moveRel(dx, dy)
-    return {"status": "success", "message": f"Moved by dx={dx}, dy={dy}"}
+    name = data.get("app")
+    print(f"Switch app: {name}")
+    if name == "laptop":
+        return {"status": "success", "app": name}
+    try:
+        return {"status": "success", "app": name, "state": _web_app(name).show()}
+    except WebDriverException as e:
+        raise HTTPException(status_code=500, detail=str(e).splitlines()[0])
 
-@app.post("/scroll")
-async def scroll_page(request: Request):
-    data = await request.json()
-    dy = data.get("dy", 0)
-    print(f"Received scroll request: {data}")
-    pyautogui.scroll(int(dy))
-    return {"status": "success", "message": f"Scrolled by dy={dy}"}
 
-@app.post("/click")
-async def mouse_click(request: Request):
-    data = await request.json()
-    button = data.get("button", "left")
-    print(f"Received click request: {data}")
-    pyautogui.click(button=button)
-    return {"status": "success", "message": f"Performed {button} click"}
+@app.post("/launch")
+def launch(app: str = "youtube"):
+    try:
+        return {"status": "success", "state": _web_app(app).show()}
+    except WebDriverException as e:
+        raise HTTPException(status_code=500, detail=str(e).splitlines()[0])
 
+
+# Sync work runs in FastAPI's threadpool; ChromeSession serialises access to
+# the single WebDriver session with a lock, LaptopControl does the same for
+# pyautogui.
 @app.post("/action")
 async def button_action(request: Request):
     data = await request.json()
-    action = data.get("action")
-    action_map = {
-            "volumeIncrease": volumeIncrease,
-            "previousTrack": previousTrack,
-            "backSeek": backSeek,
-            "pause": pause,
-            "forwardSeek": forwardSeek,
-            "nextTrack": nextTrack,
-            "volumeDecrease": volumeDecrease,
-            "refreshPage": refreshPage,
-            "altTab": altTab,
-            "desktop": desktop,
-            "openChrome": openChrome,
-            "reviveTabs": reviveTabs,
-            "volumeUp": volumeUp,
-            "volumeDown": volumeDown,
-            "fullScreen": fullScreen,
-            "prevTab": prevTab,
-            "nextTab": nextTab,
-            "closeTab": closeTab,
-            "goBackTab": goBackTab,
-            "goAheadTab": goAheadTab,
-            # YouTube Functions
-            "newTabYT": newTabYT,
-            "escapeYT": escapeYT,
-            "startYT": startYT,
-            "iButtonYT": iButtonYT,
-            # Google Chrome Functions
-            "newTabGC": newTabGC,
-            "saveLinkGC": saveLinkGC,
-            # FMovies Functions
-            "newTabFM": newTabFM,
-            "click1FM": click1FM,
-            "startFM": startFM,
-            "skipIntroFM": skipIntroFM,
-            # iBomma Functions
-            "newTabIB": newTabIB,
-            "startIB": startIB,
-            "skipIntroIB": skipIntroIB,
-            # Netflix Functions
-            "newTabN": newTabN,
-            "skipIntroN": skipIntroN,
-            "startN": startN,
-            # Prime Functions
-            "newTabAP": newTabAP,
-            "startAP": startAP,
-        }
-    
-    if action in action_map:
-            action_map[action]()
     print(f"Received action request: {data}")
-    return {"status": "success", "message": f"Action '{action}' executed"}
+    name = data.get("app") or "youtube"
+    if name == "laptop":
+        return await asyncio.to_thread(_run_laptop, data.get("action"), data.get("value"))
+    return await asyncio.to_thread(_run_web, name, data.get("action"), data.get("value"))
+
 
 @app.post("/search")
 async def search_query(request: Request):
     data = await request.json()
-    query = data.get("query")
-    visible_content_id = data.get("visibleContentId")
-    action_map = {
-            "youTube": lambda: searchYouTube(query),
-            "googleChrome": lambda: searchGoogleChrome(query),
-            "fMovies": lambda: searchFMovies(query),
-            "iBomma": lambda: searchIBomma(query),
-            "netflix": lambda: searchNetflix(query),
-            "primeVideos": lambda: searchPrime(query),
-        }
-    
-    if visible_content_id in action_map:
-            action_map[visible_content_id]()
     print(f"Received search request: {data}")
-    return {
-        "status": "success",
-        "message": f"Search query '{query}' executed for content ID {visible_content_id}"
-    }
+    return await asyncio.to_thread(_run_web, data.get("app") or "youtube", "search", data.get("query"))
+
+
+def _run_web(name, action, value=None):
+    remote = _web_app(name)
+    try:
+        out = remote.run(action, value)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except WebDriverException as e:
+        raise HTTPException(status_code=500, detail=str(e).splitlines()[0])
+    return {"status": "success", "app": name, "action": action, **out}
+
+
+def _run_laptop(action, value=None):
+    try:
+        out = laptop.run(action, value)
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"status": "success", "app": "laptop", "action": action, **out}
+
+
+@app.websocket("/ws/pointer")
+async def pointer_socket(ws: WebSocket):
+    """Trackpad stream: {"t":"m",dx,dy} move, {"t":"s",dy} scroll,
+    {"t":"c",b,double} click, {"t":"d",on} drag (hold left button)."""
+    await ws.accept()
+    try:
+        while True:
+            msg = json.loads(await ws.receive_text())
+            await asyncio.to_thread(laptop.handle_pointer, msg)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        # Never leave the left button stuck down if the phone drops off.
+        if laptop.dragging:
+            await asyncio.to_thread(laptop.set_drag, False)
+
 
 if __name__ == "__main__":
     import uvicorn

@@ -13,10 +13,12 @@ from selenium.common.exceptions import WebDriverException
 load_dotenv()
 
 from chrome_session import ChromeSession
+from jellyfin_remote import JellyfinRemote
 from laptop import LaptopControl
 from netflix_remote import NetflixRemote
 import qr_page
 from prime_remote import PrimeRemote
+from tab_keeper import TabKeeper
 from youtube_remote import YouTubeRemote
 
 HOST = os.getenv("HOST", "0.0.0.0")
@@ -34,8 +36,18 @@ web_apps = {
     "youtube": YouTubeRemote(session),
     "prime": PrimeRemote(session),
     "netflix": NetflixRemote(session),
+    "jellyfin": JellyfinRemote(session),
 }
 laptop = LaptopControl()
+
+# The remote's Chrome tabs, in the order they're kept: (name, home URL, URL marker).
+keeper = TabKeeper(session, [
+    ("youtube", web_apps["youtube"].HOME_URL, "youtube.com"),
+    ("prime", web_apps["prime"].HOME_URL, "primevideo.com"),
+    ("netflix", web_apps["netflix"].HOME_URL, "netflix.com"),
+    ("jellyfin", web_apps["jellyfin"].HOME_URL, web_apps["jellyfin"].HOSTS[0]),
+    ("qr", f"http://127.0.0.1:{PORT}/qr", f":{PORT}/qr"),
+])
 
 
 @asynccontextmanager
@@ -44,7 +56,9 @@ async def lifespan(app):
         # Attach to (or start) Chrome in the background so the API is up
         # immediately. This doesn't bring Chrome to the front.
         threading.Thread(target=_safe_connect, daemon=True).start()
+    keeper.start()
     yield
+    keeper.stop()
     with session.lock:
         session.teardown()
 
@@ -53,7 +67,7 @@ def _safe_connect():
     try:
         with session.lock:
             session.connect(launch=True)
-            session.open_background_tab(f"http://127.0.0.1:{PORT}/qr", "/qr")
+            keeper.check()
     except Exception as e:
         print(f"Chrome launch failed: {e}")
     print(f"Phone remote: {qr_page.remote_url()}  (QR code at http://127.0.0.1:{PORT}/qr)")

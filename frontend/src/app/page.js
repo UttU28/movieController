@@ -1,43 +1,63 @@
-// app/page.js
 "use client";
 
-import React from 'react';
-import { Container, Typography } from "@mui/material";
-import AppTray from "../components/AppTray";
-import HomeFunctions from "../containers/HomeFunctions";
-import HotKeys from "../containers/HotKeys";
-import YouTube from "../containers/appFunctions/YouTube";
-import AmazonPrime from "../containers/appFunctions/AmazonPrime";
-import IBomma from "../containers/appFunctions/IBomma";
-import Netflix from "../containers/appFunctions/Netflix";
-import FMovies from "../containers/appFunctions/FMovies";
-import GoogleChrome from "../containers/appFunctions/GoogleChrome";
-import { useAppState } from '../context/AppStateContext'; // Import context
-import TrackPad from "../containers/trackPad/TrackPad";
-import SearchBar from "../components/SearchBar";
+import { useEffect, useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import AppSwitcher, { APPS } from "../components/AppSwitcher";
+import { showApp } from "../lib/api";
+import JellyfinPanel from "../panels/JellyfinPanel";
+import LaptopPanel from "../panels/LaptopPanel";
+import NetflixPanel from "../panels/NetflixPanel";
+import PrimePanel from "../panels/PrimePanel";
+import YouTubePanel from "../panels/YouTubePanel";
+
+const APP_KEY = "remote.app";
+const WEB_APPS = new Set(["youtube", "prime", "netflix", "jellyfin"]);
+const THEME_COLORS = { laptop: "#0d0e12", youtube: "#0f0f0f", prime: "#0b1219", netflix: "#141414", jellyfin: "#0e1116" };
 
 export default function Home() {
-    const { visibleContentID } = useAppState(); // Get visible content from context
+  const [app, setApp] = useState(null);
 
-    return (
-        <Container>
-            <Typography variant="h5" component="h5" gutterBottom>
-                APNE BAAP KA CONTROLLER 2.0
-            </Typography>
-            <HomeFunctions />
-            <HotKeys />
-            {!visibleContentID && <AppTray />}
+  // Restore the last app, without switching Chrome's tab on page load.
+  useEffect(() => {
+    let saved = null;
+    try {
+      saved = localStorage.getItem(APP_KEY);
+    } catch {}
+    setApp(APPS.some((a) => a.id === saved) ? saved : "youtube");
+  }, []);
 
-            {/* Render selected content */}
-            {visibleContentID === "youTube" && <YouTube />}
-            {visibleContentID === "fMovies" && <FMovies />}
-            {visibleContentID === "iBomma" && <IBomma />}
-            {visibleContentID === "googleChrome" && <GoogleChrome />}
-            {visibleContentID === "primeVideos" && <AmazonPrime />}
-            {visibleContentID === "netflix" && <Netflix />}
+  useEffect(() => {
+    if (!app) return;
+    document.body.dataset.app = app;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLORS[app]);
+  }, [app]);
 
-            <TrackPad />
-            <SearchBar visibleContentId={visibleContentID} />
-        </Container>
-    );
+  const choose = (next) => {
+    setApp(next);
+    try {
+      localStorage.setItem(APP_KEY, next);
+    } catch {}
+    // Picking a web app also switches Chrome to its tab.
+    if (WEB_APPS.has(next)) showApp(next).catch(() => {});
+  };
+
+  const current = APPS.find((a) => a.id === app);
+
+  return (
+    <main className="remote">
+      <header className="topbar">
+        <div className="brand">
+          {current && <FontAwesomeIcon icon={current.icon} className="brand-icon" />}
+          <span>{current ? `${current.label} Remote` : "Remote"}</span>
+        </div>
+        {app && <AppSwitcher app={app} onChange={choose} />}
+      </header>
+
+      {app === "laptop" && <LaptopPanel />}
+      {app === "youtube" && <YouTubePanel />}
+      {app === "prime" && <PrimePanel />}
+      {app === "netflix" && <NetflixPanel />}
+      {app === "jellyfin" && <JellyfinPanel />}
+    </main>
+  );
 }

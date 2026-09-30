@@ -1,7 +1,14 @@
+import os from "node:os";
+
+// Allow the phone (any LAN address of this machine) to use the dev server.
+const lanAddresses = Object.values(os.networkInterfaces())
+  .flat()
+  .filter((i) => i && i.family === "IPv4" && !i.internal)
+  .map((i) => i.address);
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Phone on the same Wi-Fi loads the dev server at this LAN address.
-  allowedDevOrigins: ["10.0.0.11"],
+  allowedDevOrigins: lanAddresses,
 };
 
 export default nextConfig;
