@@ -1,0 +1,7 @@
+fastapi
+pyautogui
+segno
+python-dotenv
+selenium>=4.20
+uvicorn
+websockets
