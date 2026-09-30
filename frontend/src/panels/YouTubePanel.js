@@ -155,8 +155,8 @@ export default function YouTubePanel() {
       </div>
 
       <div className="row five">
-        <RemoteButton icon={faVolumeLow} label="YT -" onPress={() => action("volumeDown")} />
-        <RemoteButton icon={faVolumeHigh} label="YT +" onPress={() => action("volumeUp")} />
+        <RemoteButton icon={faVolumeLow} label="YT -" onPress={() => { action("volumeDown"); pc.action("volumeDown"); }} />
+        <RemoteButton icon={faVolumeHigh} label="YT +" onPress={() => { action("volumeUp"); pc.action("volumeUp"); }} />
         <RemoteButton icon={faClosedCaptioning} label="CC" onPress={() => action("captions")} />
         <RemoteButton icon={faGauge} label={player ? `${player.rate}x` : "Speed"} onPress={() => action("speed")} />
         <RemoteButton icon={faExpand} label="Full" active={!!state?.fullscreen} onPress={() => action("fullscreen")} />

@@ -24,7 +24,7 @@ export default function Home() {
     try {
       saved = localStorage.getItem(APP_KEY);
     } catch {}
-    setApp(APPS.some((a) => a.id === saved) ? saved : "youtube");
+    setApp(APPS.some((a) => a.id === saved) ? saved : "laptop");
   }, []);
 
   useEffect(() => {
