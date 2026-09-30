@@ -142,7 +142,7 @@ def get_mode():
 
 
 @app.post("/mode")
-def set_mode(request: Request):
+async def set_mode(request: Request):
     """Switch UI mode. night / live pauses all playback and opens the QR tab."""
     data = await request.json()
     mode = (data.get("mode") or "day").lower()
@@ -150,8 +150,9 @@ def set_mode(request: Request):
         raise HTTPException(status_code=400, detail=f"Unknown mode '{mode}'")
     MODE_STATE["mode"] = mode
     if mode in ("night", "live"):
-        _pause_all_playback()
-        _switch_to_qr(mode)
+        # These drive Chrome (blocking), so keep them off the event loop.
+        await asyncio.to_thread(_pause_all_playback)
+        await asyncio.to_thread(_switch_to_qr, mode)
     return MODE_STATE
 
 

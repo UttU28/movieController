@@ -88,6 +88,29 @@ function Start-RoleWindow([string]$Name) {
   ) | Out-Null
 }
 
+# Close a server's whole window: its restart loop and the server under it.
+# Stopping only the server isn't enough, because the window's loop restarts it.
+# Also catches windows left over from an earlier supervisor run.
+function Stop-RoleWindow([string]$Name) {
+  $scriptName = Split-Path $PSCommandPath -Leaf
+  $windows = Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -like "*$scriptName*" -and $_.CommandLine -match "-Role\s+$Name\b" }
+  foreach ($w in $windows) {
+    Stop-Tree ([int]$w.ProcessId)
+    Write-Log 'supervisor.log' "Closed old $Name window (pid $($w.ProcessId))"
+  }
+  # A server whose window is already gone can still hold the port.
+  Stop-Logged $Name
+}
+
+# Close only the remote's own Chrome (the one with the debug port), not
+# every Chrome on the PC.
+function Stop-RemoteChrome {
+  $browsers = Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -like '*--remote-debugging-port=9222*' -and $_.CommandLine -notlike '*--type=*' }
+  foreach ($b in $browsers) { Stop-Tree ([int]$b.ProcessId) }
+}
+
 function Invoke-GitPull {
   $git = (Get-Command git -ErrorAction SilentlyContinue).Source
   if (-not $git) {
@@ -126,6 +149,9 @@ if ($Role -eq 'supervisor') {
   Write-Log 'supervisor.log' 'Supervisor started'
   Invoke-GitPull
 
+  # Never run two copies of a server: close leftovers first.
+  Stop-RoleWindow 'backend'
+  Stop-RoleWindow 'frontend'
   Start-RoleWindow 'backend'
   Start-RoleWindow 'frontend'
 
@@ -151,16 +177,16 @@ if ($Role -eq 'supervisor') {
 
           # Compare remote HEAD with local HEAD to see if there is new code.
           $localHash = & git rev-parse HEAD 2>$null
-          $remoteHash = & git rev-parse @{u} 2>$null
+          $remoteHash = & git rev-parse '@{u}' 2>$null
           Pop-Location
 
           if ($localHash -ne $remoteHash -and $remoteHash) {
             Write-Log 'supervisor.log' "Update available ($remoteHash). Closing Chrome and servers, then pulling…"
-            # Close the Chrome window opened by the backend (close all Chrome instances).
-            try { & taskkill.exe /IM chrome.exe /F 2>$null | Out-Null } catch {}
-            # Shut down backend and frontend.
-            Stop-Logged 'backend'
-            Stop-Logged 'frontend'
+            # Close the remote's Chrome window (only that one).
+            try { Stop-RemoteChrome } catch {}
+            # Close both server windows, so only the new ones run afterwards.
+            Stop-RoleWindow 'backend'
+            Stop-RoleWindow 'frontend'
             # Wait for ports to free up, then pull.
             Start-Sleep -Seconds 5
             $needRestart = $true
@@ -238,6 +264,12 @@ if ($Role -eq 'supervisor') {
 
 # One server, in its own window. Restarts itself after a crash.
 $host.UI.RawUI.WindowTitle = "Remote $Role"
+$roleCreated = $false
+$roleMutex = New-Object System.Threading.Mutex($true, "MovieControllerRemote-$Role", [ref]$roleCreated)
+if (-not $roleCreated) {
+  Write-Host "A $Role window is already running. You can close this one."
+  return
+}
 $fast = 0
 while ($true) {
   if ($Role -eq 'backend') {
