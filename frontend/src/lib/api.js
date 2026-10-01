@@ -36,3 +36,17 @@ export const setPower = async (on) => (await client.post(`${baseUrl()}/power`, {
 // Chrome fullscreen on / off without switching tabs.
 export const toggleTv = async () => (await client.post(`${baseUrl()}/tv`)).data;
 
+// Reload the QR / Home screen tab Chrome is showing while the remote is off.
+export const reloadQr = async () => (await client.post(`${baseUrl()}/qr/reload`)).data;
+
+
+// Video wallpapers for the Home screen (streamed; only their links are saved).
+export const getWallpapers = async () => (await client.get(`${baseUrl()}/wallpapers`)).data;
+
+export const addWallpaper = async (url, mode = "live") =>
+  (await client.post(`${baseUrl()}/wallpapers`, { url, mode }, { timeout: 30000 })).data;
+
+export const selectWallpaper = async (id, mode = "live") =>
+  (await client.post(`${baseUrl()}/wallpapers/select`, { id, mode })).data;
+
+export const removeWallpaper = async (id) => (await client.delete(`${baseUrl()}/wallpapers/${encodeURIComponent(id)}`)).data;

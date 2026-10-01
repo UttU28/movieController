@@ -292,12 +292,38 @@ while ($true) {
       continue
     }
     $file = $node
-    $argList = @($next, 'dev', '-p', '9283', '-H', '0.0.0.0')
     $workdir = Join-Path $Root 'frontend'
     $port = 9283
+    # Production mode by default: ~100 MB instead of the dev server's ~300+ MB
+    # (and growing). Set REMOTE_FRONTEND_MODE=dev for live reload while editing.
+    $frontendMode = if ($env:REMOTE_FRONTEND_MODE -eq 'dev') { 'dev' } else { 'prod' }
+    $argList = @($next, 'dev', '-p', '9283', '-H', '0.0.0.0')
   }
 
   Clear-OurPort $port
+
+  # Build the phone page (only when its code is newer than the last build),
+  # after the old server has stopped: building under a running server breaks it.
+  if ($Role -eq 'frontend' -and $frontendMode -eq 'prod') {
+    $buildId = Join-Path $workdir '.next\BUILD_ID'
+    $sources = @(Get-ChildItem -Path (Join-Path $workdir 'src') -Recurse -File -ErrorAction SilentlyContinue) +
+      @(Get-Item (Join-Path $workdir 'package.json'), (Join-Path $workdir 'next.config.mjs') -ErrorAction SilentlyContinue)
+    $newest = ($sources | Measure-Object -Property LastWriteTime -Maximum).Maximum
+    $stale = -not (Test-Path $buildId) -or ((Get-Item $buildId).LastWriteTime -lt $newest)
+    $built = $true
+    if ($stale) {
+      Write-Log 'frontend.log' 'Building the phone page (production)...'
+      Push-Location $workdir
+      try {
+        & $node $next build 2>&1 | ForEach-Object { Write-Log 'frontend.log' "$_" }
+        $built = ($LASTEXITCODE -eq 0)
+      } finally {
+        Pop-Location
+      }
+      if (-not $built) { Write-Log 'frontend.log' 'Build failed. Running in dev mode for now.' }
+    }
+    if ($built) { $argList = @($next, 'start', '-p', '9283', '-H', '0.0.0.0') }
+  }
   Write-Log "$Role.log" "Starting $Role"
 
   $psi = New-Object System.Diagnostics.ProcessStartInfo

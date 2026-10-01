@@ -2,8 +2,9 @@
 any phone on the Wi-Fi can scan it and open the remote.
 
 The page is templates/qr.html: edit it freely; {{QR}} becomes the QR code
-(inline SVG), {{URL}} the remote's address and {{MODE}} the starting theme
-("day", "night" or "live"); the page then follows /mode by itself.
+(inline SVG), {{URL}} the remote's address, {{MODE}} the starting theme
+("night" or "live") and {{VIDEO}} / {{POSTER}} the wallpaper; the page then
+follows /mode by itself.
 Re-read on every request.
 """
 
@@ -35,11 +36,18 @@ def remote_url():
     return os.getenv("FRONTEND_URL", "").strip() or f"http://{lan_ip()}:{FRONTEND_PORT}"
 
 
-def render(mode="day"):
-    mode = (mode or "day").lower()
-    if mode not in ("day", "night", "live"):
-        mode = "day"
+def render(mode="night", wallpaper=None):
+    mode = (mode or "night").lower()
+    if mode not in ("night", "live"):
+        mode = "night"
+    paper = wallpaper or {}
     url = remote_url()
-    svg = segno.make(url, error="m").svg_inline(scale=10, border=2, dark="#000", light="#fff")
+    svg = segno.make(url, error="m").svg_inline(scale=10, border=2, dark="#000", light="#fff", omitsize=True)
     page = TEMPLATE.read_text(encoding="utf-8")
-    return page.replace("{{QR}}", svg).replace("{{URL}}", html.escape(url)).replace("{{MODE}}", mode)
+    return (
+        page.replace("{{QR}}", svg)
+        .replace("{{URL}}", html.escape(url))
+        .replace("{{MODE}}", mode)
+        .replace("{{VIDEO}}", html.escape(paper.get("video") or ""))
+        .replace("{{POSTER}}", html.escape(paper.get("poster") or ""))
+    )

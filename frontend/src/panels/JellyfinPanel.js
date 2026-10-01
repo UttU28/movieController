@@ -10,15 +10,17 @@ import {
   faExpand,
   faForwardStep,
   faHouse,
+  faListOl,
   faLocationCrosshairs,
+  faRotate,
   faStop,
   faTv,
-  faTvAlt,
   faVolumeHigh,
   faVolumeLow,
   faVolumeXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import ChromeStatus, { isReady } from "../components/ChromeStatus";
+import JellyfinDetail from "../components/JellyfinDetail";
 import JellyfinLibrary from "../components/JellyfinLibrary";
 import { fmt } from "../components/NowShowing";
 import PlayerDock from "../components/PlayerDock";
@@ -78,7 +80,7 @@ function useTracks(itemId) {
 
 function describe(state) {
   const page = PAGE_LABELS[state.pageType] || "Jellyfin";
-  const { player, focus } = state;
+  const { player, focus, detail } = state;
   if (player) {
     return {
       eyebrow: `${page} · ${player.paused ? "Paused" : "Playing"}`,
@@ -89,6 +91,7 @@ function describe(state) {
     };
   }
   if (focus) return { eyebrow: `${page} · Selected`, title: focus.title, sub: focus.sub };
+  if (detail) return { eyebrow: page, title: detail.title, sub: detail.playLabel };
   return { eyebrow: page, title: "Swipe the pad to start moving", sub: "" };
 }
 
@@ -119,13 +122,24 @@ export default function JellyfinPanel() {
   const library = useJellyfinLibrary();
   const [view, setView] = useState("remote");
   const [tracksOpen, setTracksOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
   const player = state?.player;
+  const detail = !player ? state?.detail : null;
   const tracks = useTracks(player?.id);
-  const tvLayout = state?.layout === "tv";
   useKeyboardRemote(action, view === "remote" ? KEYS : NO_KEYS);
 
   const ready = isReady(connected, state);
   const hasTracks = !!(tracks?.subtitles?.length || tracks?.audio?.length > 1);
+  const episodes = detail?.episodes?.length || 0;
+  const listLabel = detail?.listLabel || "Episodes";
+
+  // Opening a title on the TV shows its play options / episodes; leaving it
+  // closes the sheet.
+  const detailKey = detail ? detail.id : null;
+  useEffect(() => {
+    setDetailOpen(!!detailKey);
+    if (detailKey) setTracksOpen(false);
+  }, [detailKey]);
 
   const searchLibrary = (query) => {
     library.reset({ kind: "search", query });
@@ -141,12 +155,20 @@ export default function JellyfinPanel() {
   const titleBar = ready ? (
     <div className="titlebar-wrap">
       <TitleBar {...describe(state)} placeholder="Search your Jellyfin library" onSearch={searchLibrary}>
-        {(player?.skipLabel || hasTracks) && view === "remote" && (
+        {(player?.skipLabel || hasTracks || detail) && view === "remote" && (
           <div className="titlebar-actions">
             {player?.skipLabel && (
               <button type="button" className="pill-btn accent" onClick={() => { buzz(); action("skip"); }}>
                 {player.skipLabel}
               </button>
+            )}
+            {detail && (
+              <SheetToggle
+                open={detailOpen}
+                onToggle={() => setDetailOpen(!detailOpen)}
+                openLabel="Hide"
+                closedLabel={episodes ? `${listLabel} (${episodes})` : "Play options"}
+              />
             )}
             {hasTracks && (
               <SheetToggle open={tracksOpen} onToggle={() => setTracksOpen(!tracksOpen)} openLabel="Hide" closedLabel="Audio & subtitles" />
@@ -154,6 +176,13 @@ export default function JellyfinPanel() {
           </div>
         )}
       </TitleBar>
+      <Sheet
+        open={detailOpen && !!detail && view === "remote"}
+        title={episodes ? `${detail.seasons?.length ? "Seasons & episodes" : listLabel} · tap to play` : "Play"}
+        onClose={() => setDetailOpen(false)}
+      >
+        {detail && <JellyfinDetail detail={detail} action={action} onPlayed={() => setDetailOpen(false)} />}
+      </Sheet>
       <Sheet open={tracksOpen && hasTracks && view === "remote"} title="Audio & subtitles" onClose={() => setTracksOpen(false)}>
         <TrackChips
           label="Subtitles"
@@ -203,19 +232,23 @@ export default function JellyfinPanel() {
       <div className="row five">
         <RemoteButton icon={faVolumeLow} label="JF -" onPress={() => action("volumeDown")} />
         <RemoteButton icon={faVolumeHigh} label="JF +" onPress={() => action("volumeUp")} />
-        <RemoteButton
-          icon={faClosedCaptioning}
-          label="Subtitles"
-          active={tracksOpen}
-          disabled={!hasTracks}
-          onPress={() => setTracksOpen(!tracksOpen)}
-        />
-        <RemoteButton
-          icon={faTvAlt}
-          label={tvLayout ? "Desktop UI" : "TV UI"}
-          active={tvLayout}
-          onPress={() => action("layout", { value: tvLayout ? "desktop" : "tv" })}
-        />
+        {detail ? (
+          <RemoteButton
+            icon={faListOl}
+            label={episodes ? listLabel : "Play"}
+            active={detailOpen}
+            onPress={() => setDetailOpen(!detailOpen)}
+          />
+        ) : (
+          <RemoteButton
+            icon={faClosedCaptioning}
+            label="Subtitles"
+            active={tracksOpen}
+            disabled={!hasTracks}
+            onPress={() => setTracksOpen(!tracksOpen)}
+          />
+        )}
+        <RemoteButton icon={faRotate} label="Reload" onPress={() => action("reload")} />
         <RemoteButton icon={faExpand} label="Full" active={!!player?.fullscreen} onPress={() => action("fullscreen")} />
       </div>
 

@@ -18,6 +18,9 @@ export default function useRemote(app, { poll = true } = {}) {
   const applied = useRef(0);
   const queue = useRef(Promise.resolve());
   const pending = useRef(0);
+  // Bumped when a command fails: presses queued behind it are dropped rather
+  // than all firing at once when the page recovers.
+  const generation = useRef(0);
 
   const apply = useCallback((id, snapshot) => {
     if (id < applied.current || !snapshot) return;
@@ -50,7 +53,12 @@ export default function useRemote(app, { poll = true } = {}) {
     (fn, { droppable = false } = {}) => {
       if (droppable && pending.current >= MAX_PENDING) return Promise.resolve();
       pending.current += 1;
+      const gen = generation.current;
       const job = queue.current.then(async () => {
+        if (gen !== generation.current) {
+          pending.current -= 1;
+          return;
+        }
         const id = ++seq.current;
         try {
           const res = await fn();
@@ -58,6 +66,7 @@ export default function useRemote(app, { poll = true } = {}) {
           setConnected(true);
           setError("");
         } catch (err) {
+          generation.current += 1;
           setError(errorMessage(err));
         } finally {
           pending.current -= 1;

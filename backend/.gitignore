@@ -3,3 +3,5 @@ venv/
 __pycache__/
 chrome-profile/
 qr_theme.txt
+wallpapers.json
+last_app.txt

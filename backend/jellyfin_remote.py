@@ -19,7 +19,7 @@ from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 
-from chrome_session import ChromeApp
+from chrome_session import Busy, ChromeApp, PageUnresponsive
 
 BASE_DIR = Path(__file__).resolve().parent
 JELLYFIN_JS = (BASE_DIR / "jellyfin.js").read_text(encoding="utf-8")
@@ -88,7 +88,7 @@ class JellyfinRemote(ChromeApp):
         """Works whichever tab Chrome is showing: Jellyfin is controlled
         through its session, not by the tab being in front."""
         try:
-            with self.session.lock:
+            with self.session.locked(timeout=3):
                 if not self.session.connect(launch=False):
                     return {"app": self.NAME, "browser": "stopped"}
             if self._tab() is None:
@@ -104,14 +104,16 @@ class JellyfinRemote(ChromeApp):
         needs_driver = action in ("focus", "tvMode", "fullscreen", "reload", "play", "show")
         try:
             if self._tab() is None:
-                with self.session.lock:
+                with self.session.locked(timeout=15):
                     self._ensure()
                 self._wait_until_ready()
             if needs_driver:
-                with self.session.lock:
+                with self.session.locked(timeout=15):
                     self._ensure()
                     return self._run_action(action, value)
             return self._run_action(action, value)
+        except (Busy, PageUnresponsive):
+            raise
         except RuntimeError as e:
             # Errors from the page script (e.g. Jellyfin rejecting a command).
             raise ValueError(str(e))
@@ -148,6 +150,12 @@ class JellyfinRemote(ChromeApp):
             return self._js("seekBy", SEEK_SECONDS if action == "right" else -SEEK_SECONDS)
         if action in ("up", "down") and self._player_open():
             return self._js("command", "VolumeUp" if action == "up" else "VolumeDown")
+        # Everywhere else the D-pad moves our own highlight one whole item
+        # at a time (Jellyfin's Move commands stop on every part of a card).
+        if action in ("up", "down", "left", "right"):
+            return self._js("move", action)
+        if action == "select":
+            return self._js("select")
         return self._js("command", COMMANDS[action])
 
     def _player_open(self):
@@ -192,7 +200,15 @@ class JellyfinRemote(ChromeApp):
         """Play an item on the TV. value: {"id": ..., "fromStart": bool}."""
         value = value or {}
         self.session.bring_to_front()
-        return self._js("play", value["id"], bool(value.get("fromStart")))
+        result = self._js("play", value["id"], bool(value.get("fromStart")))
+        self._js("forgetDetail")
+        return result
+
+    def _do_season(self, season_id=None):
+        """Show another season's episodes on the phone (the TV stays put)."""
+        if not season_id:
+            raise ValueError("No season given")
+        return self._js("pickSeason", str(season_id))
 
     def _do_show(self, item_id=None):
         """Open an item's page on the TV."""

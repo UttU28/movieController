@@ -62,16 +62,19 @@ class TabKeeper:
 
     def run_forever(self):
         while not self._stop.wait(CHECK_SECONDS):
+            # Skip this round if Chrome is busy; there's another in 2 seconds.
+            if not self.session.lock.acquire(timeout=1):
+                continue
             try:
-                with self.session.lock:
-                    # Only while Chrome is running; never relaunch it from here.
-                    if self.session.connect(launch=False):
-                        reopened = self.check()
-                        if reopened:
-                            print(f"Reopened tabs: {', '.join(reopened)}")
+                # Only while Chrome is running; never relaunch it from here.
+                if self.session.connect(launch=False):
+                    reopened = self.check()
+                    if reopened:
+                        print(f"Reopened tabs: {', '.join(reopened)}")
             except Exception as e:
                 print(f"Tab keeper: {e}")
-                time.sleep(CHECK_SECONDS)
+            finally:
+                self.session.lock.release()
 
     def start(self):
         threading.Thread(target=self.run_forever, daemon=True).start()

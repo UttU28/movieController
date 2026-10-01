@@ -3,41 +3,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Remote QR</title>
+<title>Home</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;800&display=swap" rel="stylesheet">
 <style>
-  /* Three looks for the idle screen, picked on the phone's power screen:
-     day   light and clean
-     night near-black and dim, for a dark room
-     live  a slow, soft colour drift behind a glass card */
+  /* The PC's Home screen: a looping video wallpaper, a lock-screen clock and
+     the QR code for the phone remote. No other text.
+     night  wallpaper and clock dimmed right down, to give off little light
+     live   wallpaper and clock at full brightness */
   :root {
-    --bg: #f3f3f6;
-    --card: #ffffff;
-    --line: #e2e2e8;
-    --text: #17171b;
-    --muted: #5c5c66;
-    --accent: #6d4bff;
-    --qr-dim: 1;
-    --shadow: 0 30px 80px rgba(20, 20, 40, 0.12);
-  }
-  [data-mode="night"] {
-    --bg: #000;
-    --card: #050505;
-    --line: #111;
-    --text: #6e6e74;
-    --muted: #3c3c42;
-    --accent: #3a3a44;
+    --font: "Outfit", -apple-system, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", sans-serif;
+    --wall-opacity: 0.38;
+    --shade: rgba(0, 0, 0, 0.45);
+    --time: rgba(255, 255, 255, 0.42);
+    --date: rgba(255, 255, 255, 0.34);
     --qr-dim: 0.55;
-    --shadow: none;
   }
   [data-mode="live"] {
-    --bg: #07070c;
-    --card: rgba(18, 18, 28, 0.55);
-    --line: rgba(255, 255, 255, 0.08);
-    --text: #e6e6ee;
-    --muted: #8a8a99;
-    --accent: #8b6dff;
-    --qr-dim: 0.9;
-    --shadow: 0 30px 90px rgba(0, 0, 0, 0.55);
+    --wall-opacity: 1;
+    --shade: rgba(0, 0, 0, 0.1);
+    --time: rgba(255, 255, 255, 0.96);
+    --date: rgba(255, 255, 255, 0.85);
+    --qr-dim: 1;
   }
 
   * { box-sizing: border-box; }
@@ -45,183 +33,161 @@
     margin: 0;
     height: 100%;
     overflow: hidden;
-    background: var(--bg);
-    color: var(--text);
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    transition: background 0.6s, color 0.6s;
+    background: #000;
+    font-family: var(--font);
   }
+  /* Hide the mouse pointer once it stops moving. */
+  body.idle, body.idle * { cursor: none !important; }
 
-  /* Live: three blurred colour fields drifting very slowly. */
-  .aurora {
+  .wall {
     position: fixed;
-    inset: -20%;
-    z-index: 0;
-    opacity: 0;
-    transition: opacity 0.8s;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: var(--wall-opacity);
+    transition: opacity 1s ease;
+  }
+  .wall.fading { opacity: 0; }
+  .shade {
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(110% 70% at 50% 0%, rgba(0, 0, 0, 0.35), transparent 60%),
+      var(--shade);
+    transition: background 1s ease;
     pointer-events: none;
   }
-  [data-mode="live"] .aurora { opacity: 1; }
-  .aurora span {
-    position: absolute;
-    width: 55vmax;
-    height: 55vmax;
-    border-radius: 50%;
-    filter: blur(90px);
-    opacity: 0.32;
-    animation: drift 38s ease-in-out infinite alternate;
-  }
-  .aurora span:nth-child(1) { background: #6d4bff; left: 5%; top: 10%; }
-  .aurora span:nth-child(2) { background: #00a4dc; right: 5%; top: 25%; animation-duration: 46s; animation-delay: -12s; }
-  .aurora span:nth-child(3) { background: #e0336b; left: 30%; bottom: 0; animation-duration: 54s; animation-delay: -24s; opacity: 0.22; }
-  @keyframes drift {
-    from { transform: translate(0, 0) scale(1); }
-    to   { transform: translate(8vmax, -6vmax) scale(1.15); }
-  }
-  @media (prefers-reduced-motion: reduce) { .aurora span { animation: none; } }
 
-  main {
-    position: relative;
-    z-index: 1;
-    height: 100%;
-    display: grid;
-    place-items: center;
-    padding: 24px;
-  }
-  .stack {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 22px;
-  }
-
-  /* Clock: dim and large when idle (night / live), hidden in day. */
+  /* Lock-screen clock: just the text, thick, with a soft shadow so it reads
+     over any wallpaper. */
   .clock {
-    display: none;
-    font-weight: 200;
-    font-size: clamp(56px, 11vmin, 132px);
-    letter-spacing: -0.03em;
-    line-height: 1;
-    font-variant-numeric: tabular-nums;
-    color: var(--text);
+    position: fixed;
+    top: 7vh;
+    left: 0;
+    right: 0;
+    text-align: center;
+    user-select: none;
   }
   .date {
-    display: none;
-    margin-top: -12px;
-    font-size: 0.95rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--muted);
+    font-size: clamp(16px, 2.6vmin, 30px);
+    font-weight: 600;
+    color: var(--date);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 2px 18px rgba(0, 0, 0, 0.35);
+    transition: color 1s ease;
   }
-  [data-mode="night"] .clock, [data-mode="live"] .clock,
-  [data-mode="night"] .date, [data-mode="live"] .date { display: block; }
+  .time {
+    font-size: clamp(80px, 18vmin, 220px);
+    font-weight: 800;
+    line-height: 0.95;
+    letter-spacing: -0.035em;
+    font-variant-numeric: tabular-nums;
+    color: var(--time);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.35), 0 6px 40px rgba(0, 0, 0, 0.3);
+    transition: color 1s ease;
+  }
 
-  .card {
-    display: flex;
-    align-items: center;
-    gap: 26px;
-    padding: 22px 26px 22px 22px;
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: 28px;
-    box-shadow: var(--shadow);
-    -webkit-backdrop-filter: blur(18px);
-    backdrop-filter: blur(18px);
-    transition: background 0.6s, border-color 0.6s, box-shadow 0.6s;
-  }
+  /* The QR code alone, bottom-left. */
   .qr {
-    flex: none;
+    position: fixed;
+    left: 4vmin;
+    bottom: 4vmin;
+    padding: 0.9vmin;
     background: #fff;
-    padding: 10px;
-    border-radius: 18px;
+    border-radius: 2.2vmin;
     line-height: 0;
     filter: brightness(var(--qr-dim));
-    transition: filter 0.6s;
+    box-shadow: 0 16px 50px rgba(0, 0, 0, 0.35);
+    transition: filter 1s ease;
   }
   .qr svg {
     display: block;
-    width: clamp(170px, 26vmin, 260px);
+    width: clamp(190px, 27vmin, 320px);
     height: auto;
-  }
-  .text {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    max-width: 280px;
-  }
-  .eyebrow {
-    margin: 0;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--accent);
-  }
-  h1 {
-    margin: 0;
-    font-size: 1.7rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-  }
-  p {
-    margin: 0;
-    font-size: 0.95rem;
-    line-height: 1.5;
-    color: var(--muted);
-  }
-  .url {
-    font: 600 0.9rem ui-monospace, Consolas, monospace;
-    color: var(--text);
-    opacity: 0.8;
-    word-break: break-all;
-  }
-  [data-mode="night"] h1 { font-weight: 500; }
-
-  @media (max-width: 640px) {
-    .card { flex-direction: column; text-align: center; padding: 22px; }
-    .text { align-items: center; }
   }
 </style>
 </head>
 <body>
-<div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
-<main>
-  <div class="stack">
-    <div class="clock" id="clock">--:--</div>
-    <div class="date" id="date"></div>
-    <section class="card">
-      <div class="qr">{{QR}}</div>
-      <div class="text">
-        <p class="eyebrow">Phone remote</p>
-        <h1>Scan to control</h1>
-        <p>Point your phone camera at the code. Same Wi-Fi as this PC.</p>
-        <div class="url">{{URL}}</div>
-      </div>
-    </section>
-  </div>
-</main>
+<video class="wall" id="wall" data-src="{{VIDEO}}" poster="{{POSTER}}" muted loop playsinline preload="none" aria-hidden="true"></video>
+<div class="shade" aria-hidden="true"></div>
+
+<div class="clock" aria-hidden="true">
+  <div class="date" id="date"></div>
+  <div class="time" id="time"></div>
+</div>
+
+<div class="qr" aria-label="Scan to open the phone remote">{{QR}}</div>
+
 <script>
-  // Clock (only visible in night / live).
-  const clock = document.getElementById("clock");
-  const date = document.getElementById("date");
+  // ---- Clock
+  const timeEl = document.getElementById("time");
+  const dateEl = document.getElementById("date");
   function tick() {
     const now = new Date();
-    clock.textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    date.textContent = now.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" });
+    timeEl.textContent = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).replace(/\s?[AP]M$/i, "");
+    dateEl.textContent = now.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
   }
   tick();
-  setInterval(tick, 15000);
+  setInterval(tick, 10000);
 
-  // Follow the theme picked on the phone, without reloading.
-  async function followMode() {
+  // ---- Pointer: hide after 3 s without movement.
+  let idleTimer;
+  function wake() {
+    document.body.classList.remove("idle");
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => document.body.classList.add("idle"), 3000);
+  }
+  addEventListener("mousemove", wake);
+  wake();
+
+  // ---- Wallpaper: only plays while this tab is the one showing. When it's
+  // hidden the video is unloaded entirely, so it holds no decoder or memory.
+  const wall = document.getElementById("wall");
+  function load() {
+    const src = wall.dataset.src;
+    if (!src) return;
+    if (wall.getAttribute("src") !== src) wall.setAttribute("src", src);
+    wall.play().catch(() => {});
+  }
+  function unload() {
+    wall.pause();
+    wall.removeAttribute("src");
+    wall.load();
+  }
+  function onVisibility() {
+    if (document.visibilityState === "visible") load();
+    else unload();
+  }
+  document.addEventListener("visibilitychange", onVisibility);
+  onVisibility();
+
+  function swapVideo(src, poster) {
+    if (!src || wall.dataset.src === src) return;
+    wall.dataset.src = src;
+    wall.setAttribute("poster", poster || "");
+    if (document.visibilityState !== "visible") return;  // loads when shown
+    wall.classList.add("fading");
+    setTimeout(() => {
+      load();
+      wall.addEventListener("playing", () => wall.classList.remove("fading"), { once: true });
+      setTimeout(() => wall.classList.remove("fading"), 4000);
+    }, 600);
+  }
+
+  // ---- Follow the theme and wallpaper picked on the phone (only while shown).
+  async function follow() {
+    if (document.visibilityState !== "visible") return;
     try {
       const res = await fetch("/mode", { cache: "no-store" });
-      const { mode } = await res.json();
-      if (mode && document.documentElement.dataset.mode !== mode) {
-        document.documentElement.dataset.mode = mode;
+      const state = await res.json();
+      if (state.mode && document.documentElement.dataset.mode !== state.mode) {
+        document.documentElement.dataset.mode = state.mode;
       }
+      if (state.wallpaper) swapVideo(state.wallpaper.video, state.wallpaper.poster);
     } catch (e) {}
   }
-  setInterval(followMode, 2500);
+  setInterval(follow, 2500);
+  wall.addEventListener("stalled", () => setTimeout(() => { if (document.visibilityState === "visible") wall.play().catch(() => {}); }, 2000));
 </script>
 </body>
 </html>

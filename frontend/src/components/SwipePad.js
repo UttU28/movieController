@@ -26,10 +26,12 @@ function edgeAt(rect, x, y) {
 }
 
 // A TV-style touch surface: swipe to move (long swipes move several steps),
-// tap the middle for OK, tap an edge for one step, hold an edge to repeat.
+// tap the OK circle for OK, tap an edge for one step, hold an edge to repeat.
+// Taps anywhere else do nothing, so OK never fires by accident.
 export default function SwipePad({ onMove, onSelect }) {
   const [flash, setFlash] = useState(null);
   const g = useRef(null);
+  const okRef = useRef(null);
   const timers = useRef({ hold: null, repeat: null, flash: null });
 
   useEffect(() => {
@@ -62,7 +64,7 @@ export default function SwipePad({ onMove, onSelect }) {
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     const edge = edgeAt(e.currentTarget.getBoundingClientRect(), e.clientX, e.clientY);
-    g.current = { x: e.clientX, y: e.clientY, ax: 0, ay: 0, travel: 0, start: performance.now(), edge, moved: false, held: false };
+    g.current = { x: e.clientX, y: e.clientY, ax: 0, ay: 0, travel: 0, start: performance.now(), edge, onOk: onOkCircle(e), moved: false, held: false };
     stopRepeat();
     if (edge) {
       timers.current.hold = setTimeout(() => {
@@ -102,6 +104,15 @@ export default function SwipePad({ onMove, onSelect }) {
     }
   };
 
+  // Is this point inside the OK circle (not just near the middle)?
+  const onOkCircle = (e) => {
+    const r = okRef.current?.getBoundingClientRect();
+    if (!r) return false;
+    const dx = e.clientX - (r.left + r.width / 2);
+    const dy = e.clientY - (r.top + r.height / 2);
+    return dx * dx + dy * dy <= (r.width / 2) ** 2;
+  };
+
   const onUp = () => {
     const s = g.current;
     g.current = null;
@@ -109,12 +120,12 @@ export default function SwipePad({ onMove, onSelect }) {
     if (!s || s.held) return;
     const quick = performance.now() - s.start < TAP_MS * 2;
     if (!s.moved && quick) {
-      if (s.edge) {
-        move(s.edge);
-      } else {
+      if (s.onOk) {
         buzz();
         show("ok");
         onSelect();
+      } else if (s.edge) {
+        move(s.edge);
       }
     }
   };
@@ -135,7 +146,7 @@ export default function SwipePad({ onMove, onSelect }) {
         <FontAwesomeIcon icon={faChevronDown} className={`pad-arrow down${flash === "down" ? " lit" : ""}`} />
         <FontAwesomeIcon icon={faChevronLeft} className={`pad-arrow left${flash === "left" ? " lit" : ""}`} />
         <FontAwesomeIcon icon={faChevronRight} className={`pad-arrow right${flash === "right" ? " lit" : ""}`} />
-        <span className={`pad-ok${flash === "ok" ? " lit" : ""}`}>OK</span>
+        <span ref={okRef} className={`pad-ok${flash === "ok" ? " lit" : ""}`}>OK</span>
       </div>
     </section>
   );

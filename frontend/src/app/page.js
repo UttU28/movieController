@@ -1,52 +1,63 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPowerOff } from "@fortawesome/free-solid-svg-icons";
-import AppSwitcher, { APPS } from "../components/AppSwitcher";
+import { faArrowLeft, faPowerOff } from "@fortawesome/free-solid-svg-icons";
+import AppSwitcher from "../components/AppSwitcher";
+import LaptopBubble from "../components/LaptopBubble";
+import LaptopDrawer from "../components/LaptopDrawer";
 import PowerScreen from "../components/PowerScreen";
 import { buzz } from "../components/RemoteButton";
 import { getMode, setMode, setPower, showApp, toggleTv } from "../lib/api";
 import usePcVolumeKeys from "../lib/usePcVolumeKeys";
 import JellyfinPanel from "../panels/JellyfinPanel";
-import LaptopPanel from "../panels/LaptopPanel";
+import LaptopPanel, { TrackpadStatus } from "../panels/LaptopPanel";
 import NetflixPanel from "../panels/NetflixPanel";
 import PrimePanel from "../panels/PrimePanel";
 import YouTubePanel from "../panels/YouTubePanel";
 
-const APP_KEY = "remote.app";
 const WEB_APPS = new Set(["youtube", "prime", "netflix", "jellyfin"]);
 const THEME_COLORS = { laptop: "#0d0e12", youtube: "#0f0f0f", prime: "#0b1219", netflix: "#141414", jellyfin: "#0e1116" };
 const POLL_MS = 4000;
+// After picking an app here, ignore polls that still report the old one.
+const PICK_HOLD_MS = 6000;
 
 export default function Home() {
   const [app, setApp] = useState(null);
-  // Shared with the backend (and every other phone): power + QR theme.
-  const [remote, setRemote] = useState({ power: "on", mode: "day", tvMode: false });
+  // Shared with the backend (and every other phone): power, QR theme, and
+  // the last app used (the backend's lastApp is the source of truth).
+  const [remote, setRemote] = useState({ power: "off", mode: "night", tvMode: false, lastApp: null });
+  // Opening the page always starts on the power screen.
+  const [standby, setStandby] = useState(true);
+  const pickedAt = useRef(0);
   const [busy, setBusy] = useState(false);
+  // Laptop control: a floating bubble, a slide-up drawer, or the full page.
+  const [laptop, setLaptop] = useState(null); // null | "drawer" | "full"
+  const [drawerClose, setDrawerClose] = useState(0);
+  const [padStatus, setPadStatus] = useState("connecting");
   usePcVolumeKeys();
 
-  // Restore the last app, without switching Chrome's tab on page load.
+  // The full laptop page uses the laptop theme; otherwise the app's.
+  const themeApp = laptop === "full" ? "laptop" : app;
   useEffect(() => {
-    let saved = null;
-    try {
-      saved = localStorage.getItem(APP_KEY);
-    } catch {}
-    setApp(APPS.some((a) => a.id === saved) ? saved : "laptop");
-  }, []);
-
-  useEffect(() => {
-    if (!app) return;
-    document.body.dataset.app = app;
-    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLORS[app]);
-  }, [app]);
+    if (!themeApp) return;
+    document.body.dataset.app = themeApp;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLORS[themeApp]);
+  }, [themeApp]);
 
   // Keep power / theme in step with the backend (another phone may change it).
+  // Also follows the last app (another phone may have switched apps).
+  const apply = useCallback((m) => {
+    setRemote(m);
+    if (m?.lastApp && WEB_APPS.has(m.lastApp) && Date.now() - pickedAt.current > PICK_HOLD_MS) setApp(m.lastApp);
+    return m;
+  }, []);
+
   const refresh = useCallback(async () => {
     try {
-      setRemote(await getMode());
+      apply(await getMode());
     } catch {}
-  }, []);
+  }, [apply]);
 
   useEffect(() => {
     refresh();
@@ -60,7 +71,7 @@ export default function Home() {
     if (optimistic) setRemote((r) => ({ ...r, ...optimistic }));
     setBusy(true);
     try {
-      setRemote(await fn());
+      apply(await fn());
     } catch {
       refresh();
     } finally {
@@ -70,10 +81,10 @@ export default function Home() {
 
   const choose = (next) => {
     setApp(next);
-    try {
-      localStorage.setItem(APP_KEY, next);
-    } catch {}
-    // Picking a web app also switches Chrome to its tab.
+    pickedAt.current = Date.now();
+    setRemote((r) => ({ ...r, lastApp: next }));
+    // Picking a web app switches Chrome to its tab; the backend remembers it
+    // as the last app.
     if (WEB_APPS.has(next)) showApp(next).catch(() => {});
   };
 
@@ -82,17 +93,45 @@ export default function Home() {
     run(() => setPower(false), { power: "off" });
   };
 
-  if (remote.power === "off") {
+  // The backend opens its last app's tab in Chrome; this phone shows that
+  // app's remote.
+  const powerOn = () => {
+    setStandby(false);
+    if (remote.lastApp) setApp(remote.lastApp);
+    run(() => setPower(true), { power: "on" });
+  };
+
+  if (standby || remote.power === "off" || !app) {
     return (
       <main className="remote">
         <PowerScreen
           mode={remote.mode}
           tvMode={remote.tvMode}
+          pcOn={remote.power === "on"}
+          lastApp={remote.lastApp}
           busy={busy}
-          onPowerOn={() => run(() => setPower(true), { power: "on" })}
+          onPowerOn={powerOn}
           onTheme={(mode) => run(() => setMode(mode), { mode })}
           onFullscreen={() => run(toggleTv)}
         />
+      </main>
+    );
+  }
+
+  if (laptop === "full") {
+    return (
+      <main className="remote">
+        <header className="topbar page-head">
+          <button type="button" className="back-btn" onClick={() => setLaptop(null)}>
+            <FontAwesomeIcon icon={faArrowLeft} />
+            Back
+          </button>
+          <div className="page-title">
+            <h1>Laptop Control</h1>
+            <TrackpadStatus status={padStatus} />
+          </div>
+        </header>
+        <LaptopPanel variant="full" onStatus={setPadStatus} />
       </main>
     );
   }
@@ -108,11 +147,18 @@ export default function Home() {
         </div>
       </header>
 
-      {app === "laptop" && <LaptopPanel />}
       {app === "youtube" && <YouTubePanel />}
       {app === "prime" && <PrimePanel />}
       {app === "netflix" && <NetflixPanel />}
       {app === "jellyfin" && <JellyfinPanel />}
+
+      {laptop === "drawer" && (
+        <LaptopDrawer closeSignal={drawerClose} onClose={() => setLaptop(null)} onMore={() => setLaptop("full")} />
+      )}
+      <LaptopBubble
+        active={laptop === "drawer"}
+        onTap={() => (laptop === "drawer" ? setDrawerClose((n) => n + 1) : setLaptop("drawer"))}
+      />
     </main>
   );
 }

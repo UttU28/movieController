@@ -2,11 +2,10 @@
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faAmazon, faYoutube } from "@fortawesome/free-brands-svg-icons";
-import { faClapperboard, faLaptop, faN } from "@fortawesome/free-solid-svg-icons";
+import { faClapperboard, faN } from "@fortawesome/free-solid-svg-icons";
 import { buzz } from "./RemoteButton";
 
 export const APPS = [
-  { id: "laptop", label: "Laptop", icon: faLaptop },
   { id: "youtube", label: "YouTube", icon: faYoutube },
   { id: "prime", label: "Prime", icon: faAmazon },
   { id: "netflix", label: "Netflix", icon: faN },

@@ -3,7 +3,7 @@
 // (D-pad), plus helpers to read/drive the player. Re-sent on every call and
 // guarded by VERSION, so full page reloads simply reinstall it.
 (() => {
-  const VERSION = 17;
+  const VERSION = 21;
   if (window.__ytr && window.__ytr.version === VERSION) return;
 
   const FOCUS_ATTR = 'data-ytr-focus';
@@ -286,74 +286,58 @@
   // The first results on a search page, for the phone's result list.
   const MAX_RESULTS = 10;
 
-  function searchResultTiles() {
-    const root = document.querySelector('ytd-search #primary, ytd-search') || document;
+  // Playable tiles under `root` (search results, the watch page's sidebar).
+  function playableTiles(root, skipSecondary, limit = MAX_RESULTS) {
+    if (!root) return [];
     return [...root.querySelectorAll(ITEM_SEL)].filter((el) => {
       const parent = el.parentElement && el.parentElement.closest(ITEM_SEL);
-      if (parent || isAd(el) || el.closest('#secondary')) return false;
+      if (parent || isAd(el) || (skipSecondary && el.closest('#secondary'))) return false;
       const a = linkOf(el);
       const href = a ? a.getAttribute('href') || '' : '';
       return /\/watch\?|\/shorts\/|[?&]list=/.test(href);
-    }).slice(0, MAX_RESULTS);
+    }).slice(0, limit);
+  }
+
+  // What the phone's lists show for each tile: title, channel, duration.
+  function tileInfo(el, index) {
+    const info = describe(el);
+    const href = linkOf(el).href;
+    // The time badge on the thumbnail ("12:34" / "1:02:03").
+    const badge = [...el.querySelectorAll('[class*="BadgeShapeText"], ytd-thumbnail-overlay-time-status-renderer span, badge-shape div')]
+      .find((n) => /^\d+(:\d\d)+$/.test((n.textContent || '').trim()));
+    const duration = badge ? badge.textContent.trim() : '';
+    const live = /^live$/i.test(duration) || !!el.querySelector('[class*="Live"], .badge-style-type-live-now');
+    return {
+      index,
+      kind: /[?&]list=RD/.test(href) ? 'mix' : info.kind,
+      title: info.title,
+      channel: info.channel,
+      duration: /\d:\d/.test(duration) ? duration : live ? 'LIVE' : '',
+      href,
+    };
   }
 
   function searchResults() {
     if (pageType() !== 'search') return null;
-    return searchResultTiles().map((el, index) => {
-      const info = describe(el);
-      const href = linkOf(el).href;
-      // The time badge on the thumbnail ("12:34" / "1:02:03").
-      const badge = [...el.querySelectorAll('[class*="BadgeShapeText"], ytd-thumbnail-overlay-time-status-renderer span, badge-shape div')]
-        .find((n) => /^\d+(:\d\d)+$/.test((n.textContent || '').trim()));
-      const duration = badge ? badge.textContent.trim() : '';
-      const live = /^live$/i.test(duration) || !!el.querySelector('[class*="Live"], .badge-style-type-live-now');
-      return {
-        index,
-        kind: /[?&]list=RD/.test(href) ? 'mix' : info.kind,
-        title: info.title,
-        channel: info.channel,
-        duration: /\d:\d/.test(duration) ? duration : live ? 'LIVE' : '',
-        href,
-      };
-    });
+    const root = document.querySelector('ytd-search #primary, ytd-search');
+    return playableTiles(root, true).map(tileInfo);
+  }
+
+  // "Up next": the watch page's recommendations (right-hand column, or under
+  // the video in theater mode).
+  function upNext() {
+    if (pageType() !== 'watch') return null;
+    const root = document.querySelector('ytd-watch-flexy #related') || document.querySelector('ytd-watch-flexy #secondary');
+    // Full videos first; the sidebar often opens with a Shorts shelf.
+    // Inside a Mix every link carries the mix's list id; they're still plain videos.
+    const tiles = playableTiles(root, false, 40).map(tileInfo).map((t) => (t.kind === 'mix' ? { ...t, kind: 'video' } : t));
+    const ordered = [...tiles.filter((t) => t.kind !== 'short'), ...tiles.filter((t) => t.kind === 'short')];
+    return ordered.slice(0, MAX_RESULTS).map((t, index) => ({ ...t, index }));
   }
 
   function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
 
   // The first recommendations in the watch page's right-hand sidebar.
-  function upNextTiles() {
-    if (pageType() !== 'watch') return [];
-    const root = document.querySelector('#secondary ytd-watch-next-secondary-results-renderer, #secondary');
-    if (!root) return [];
-    return [...root.querySelectorAll('ytd-compact-video-renderer, ytd-compact-radio-renderer, ytd-lockup-renderer')]
-      .filter((el) => {
-        if (isAd(el)) return false;
-        const a = linkOf(el);
-        const href = a ? a.getAttribute('href') || '' : '';
-        return /\/watch\?|\/shorts\/|[?&]list=/.test(href);
-      })
-      .slice(0, MAX_RESULTS);
-  }
-
-  function upNext() {
-    return upNextTiles().map((el, index) => {
-      const a = linkOf(el);
-      const titleEl = el.querySelector('#video-title, .lockup-vm-text, [role="heading"]');
-      const channelEl = el.querySelector('ytd-channel-name #text, #channel-name #text, .metadata-owner, [data-a11y="sb-chip-subscriber-content"]');
-      // Duration badge: plain text node ("12:34") inside #text or a badge-shape.
-      const badgeNodes = [...el.querySelectorAll('#text, badge-shape div, [class*="BadgeShapeText"]')];
-      const badge = badgeNodes.find((n) => /^\d+(:\d\d)+$/.test((n.textContent || '').trim()));
-      return {
-        index,
-        kind: /[?&]list=RD/.test(a.href) ? 'mix' : 'video',
-        title: (titleEl ? titleEl.textContent : '').trim() || a.getAttribute('aria-label') || '',
-        channel: channelEl ? channelEl.textContent.trim() : '',
-        duration: badge ? badge.textContent.trim() : '',
-        href: a.href,
-      };
-    }).filter((r) => r.title);
-  }
-
   const api = {
     version: VERSION,
 
@@ -368,11 +352,6 @@
         results: searchResults(),
         upNext: upNext(),
       };
-    },
-
-    resultHref(i) {
-      const r = searchResults();
-      return r && r[i] ? r[i].href : null;
     },
 
     upNextHref(i) {

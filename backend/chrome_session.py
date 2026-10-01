@@ -18,11 +18,12 @@ import subprocess
 import threading
 import time
 import urllib.request
+from contextlib import contextmanager
 from pathlib import Path
 
 import websocket
 from selenium import webdriver
-from selenium.common.exceptions import WebDriverException
+from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium.webdriver.chrome.options import Options
 
 import window_focus
@@ -61,6 +62,21 @@ def _host_matches(url, hosts):
     return any(h in (url or "") for h in hosts)
 
 
+# How long a page may take before we give up on it. A site that hangs (a
+# slow Jellyfin server, a stuck Prime page) must never hold up the remote.
+SCRIPT_TIMEOUT = 8
+PAGE_LOAD_TIMEOUT = 25
+EVAL_TIMEOUT = 8
+
+
+class Busy(RuntimeError):
+    """Chrome is tied up with another request; try again shortly."""
+
+
+class PageUnresponsive(RuntimeError):
+    """The page didn't answer in time (site down, loading, or frozen)."""
+
+
 class ChromeSession:
     def __init__(self):
         self.driver = None
@@ -77,12 +93,10 @@ class ChromeSession:
             f"--remote-debugging-port={DEBUG_PORT}",
             f"--user-data-dir={PROFILE_DIR}",
             "--autoplay-policy=no-user-gesture-required",
-            # Keep background / covered tabs running at full speed: the remote
-            # drives tabs that aren't in front (Chrome otherwise slows their
-            # timers to once a minute).
+            # Keep background tabs' timers running (the remote reads tabs that
+            # aren't in front), but let Chrome lower their priority and memory
+            # as usual: playing on Jellyfin brings its tab forward anyway.
             "--disable-background-timer-throttling",
-            "--disable-renderer-backgrounding",
-            "--disable-backgrounding-occluded-windows",
             "--no-first-run",
             "--no-default-browser-check",
             "--start-maximized",
@@ -118,6 +132,9 @@ class ChromeSession:
         opts = Options()
         opts.debugger_address = f"127.0.0.1:{DEBUG_PORT}"
         self.driver = webdriver.Chrome(options=opts)
+        # Never wait minutes on a page that hangs.
+        self.driver.set_script_timeout(SCRIPT_TIMEOUT)
+        self.driver.set_page_load_timeout(PAGE_LOAD_TIMEOUT)
         # chromedriver attaches to an arbitrary tab; start on the one showing.
         visible = self._visible_tab_id()
         if visible in self.driver.window_handles:
@@ -233,20 +250,36 @@ class ChromeSession:
         """First tab showing one of `hosts` (DevTools target dict), or None."""
         return next((t for t in self._tab_list() if _host_matches(t.get("url"), hosts)), None)
 
-    def eval_in_tab(self, tab, expression, timeout=20):
+    @contextmanager
+    def locked(self, timeout):
+        """Hold the Chrome lock, but give up after `timeout` seconds instead of
+        queueing behind a slow request forever."""
+        if not self.lock.acquire(timeout=timeout):
+            raise Busy("The remote is busy with another request. Try again.")
+        try:
+            yield
+        finally:
+            self.lock.release()
+
+    def eval_in_tab(self, tab, expression, timeout=EVAL_TIMEOUT):
         """Run JS in a tab over its own DevTools socket and return the result
         (promises are awaited). Doesn't need the WebDriver or the tab to be in
-        front, and doesn't activate it."""
-        ws = websocket.create_connection(tab["webSocketDebuggerUrl"], timeout=timeout, suppress_origin=True)
+        front, and doesn't activate it. Raises PageUnresponsive if the page
+        doesn't answer within `timeout` seconds."""
         try:
-            ws.send(json.dumps({"id": 1, "method": "Runtime.evaluate", "params": {
-                "expression": expression, "returnByValue": True, "awaitPromise": True}}))
-            while True:
-                reply = json.loads(ws.recv())
-                if reply.get("id") == 1:
-                    break
-        finally:
-            ws.close()
+            ws = websocket.create_connection(tab["webSocketDebuggerUrl"], timeout=timeout, suppress_origin=True)
+            try:
+                ws.send(json.dumps({"id": 1, "method": "Runtime.evaluate", "params": {
+                    "expression": expression, "returnByValue": True, "awaitPromise": True,
+                    "timeout": int(timeout * 1000)}}))
+                while True:
+                    reply = json.loads(ws.recv())
+                    if reply.get("id") == 1:
+                        break
+            finally:
+                ws.close()
+        except (websocket.WebSocketException, OSError, ValueError) as e:
+            raise PageUnresponsive("The page isn't responding right now.") from e
         result = reply.get("result", {})
         if "exceptionDetails" in result:
             details = result["exceptionDetails"]
@@ -311,6 +344,19 @@ class ChromeSession:
         self._tv_before_minimize = target == "fullscreen"
         return target == "fullscreen"
 
+    def ensure_tv_mode(self):
+        """Enter fullscreen if Chrome isn't already. Leaves an existing
+        fullscreen window alone."""
+        state = self.window_state()
+        if state == "fullscreen":
+            self._tv_before_minimize = True
+            return True
+        if state == "minimized":
+            self.set_window_state("normal")
+        self.set_window_state("fullscreen")
+        self._tv_before_minimize = True
+        return True
+
 
 class ChromeApp:
     """Base for a remote that drives one website in the shared Chrome.
@@ -346,7 +392,7 @@ class ChromeApp:
         launches one or changes which tab is showing; if Chrome is showing
         another app's tab the phone gets pageType "otherTab" and can offer to
         switch."""
-        with self.session.lock:
+        with self.session.locked(timeout=3):
             try:
                 if not self.session.connect(launch=False):
                     return {"app": self.NAME, "browser": "stopped"}
@@ -361,7 +407,7 @@ class ChromeApp:
     def show(self):
         """Switch Chrome to this app's tab (opening it if needed) and bring it
         to the front. Called when you pick this app on the phone."""
-        with self.session.lock:
+        with self.session.locked(timeout=15):
             self._ensure()
             self.session.bring_to_front()
             return self._state()
@@ -371,7 +417,7 @@ class ChromeApp:
         return False
 
     def screenshot(self):
-        with self.session.lock:
+        with self.session.locked(timeout=10):
             try:
                 if not self.session.connect(launch=False):
                     return None
@@ -384,9 +430,12 @@ class ChromeApp:
         self.session.use_tab(self.HOSTS, self.HOME_URL)
 
     def run(self, action, value=None):
-        with self.session.lock:
+        with self.session.locked(timeout=15):
             try:
                 return self._run(action, value)
+            except TimeoutException as e:
+                # The page hung (not the session): report it, don't retry.
+                raise PageUnresponsive("The page took too long to respond.") from e
             except WebDriverException:
                 # Session died mid-command (window closed, crash): restart once.
                 self.session.teardown()
