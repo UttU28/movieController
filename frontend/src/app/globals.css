@@ -1650,49 +1650,166 @@ body[data-app="jellyfin"] {
   background: color-mix(in srgb, #ff5a5f 12%, var(--surface));
 }
 
-/* ---------- Power-off screen ---------- */
-.remote:has(.power-screen) {
-  min-height: 100dvh;
-  justify-content: center;
+/* ---------- Power-off screen: same frame as a media remote ---------- */
+.remote:has(.power-layout) {
+  height: 100dvh;
+  box-sizing: border-box;
+  padding-bottom: 0;
+  overflow: hidden;
 }
-.power-screen {
+.power-layout {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 22px;
-  padding: 24px 0;
-  text-align: center;
+  gap: 10px;
+  overflow: hidden;
+  transition: gap 0.48s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.power-big {
-  width: 128px;
-  height: 128px;
+.power-layout.themes-open {
+  gap: 0;
+}
+/* Slots collapse to nothing while their contents slide off the screen. */
+.power-slot {
+  display: grid;
+  grid-template-rows: 1fr;
+  min-height: 0;
+  transition: grid-template-rows 0.48s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.power-layout.themes-open .power-slot {
+  grid-template-rows: 0fr;
+}
+.power-chrome-top,
+.power-chrome-bottom {
+  min-height: 0;
+  overflow: hidden;
+  transition: transform 0.48s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.32s ease;
+}
+.power-chrome-top {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.power-layout.themes-open .power-chrome-top {
+  transform: translateY(-40vh);
+  opacity: 0;
+}
+.power-chrome-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.power-layout.themes-open .power-chrome-bottom {
+  transform: translateY(40vh);
+  opacity: 0;
+}
+.power-slot.bottom {
+  margin: 0 -16px;
+}
+.power-chrome-bottom .dock {
+  margin: 0;
+}
+.power-layout.themes-open > .row {
+  padding-bottom: calc(4px + env(safe-area-inset-bottom));
+}
+.power-layout .rbtn.active {
+  background: color-mix(in srgb, var(--focus) 16%, var(--surface));
+  border-color: var(--focus);
+  color: var(--focus);
+}
+.power-chrome-top > .titlebar:first-child {
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 60%),
+    var(--surface);
+}
+.power-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.power-theme {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 100%;
+  animation: power-theme-in 0.48s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes power-theme-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.theme-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0 8px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.theme-close {
+  width: 32px;
+  height: 32px;
+  padding: 0;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 2.6rem;
-  color: #fff;
-  border: 2px solid transparent;
-  background:
-    radial-gradient(circle at 50% 35%, #2a2d36, #121318) padding-box,
-    linear-gradient(135deg, #3ddc97, #1a98ff) border-box;
-  box-shadow: 0 0 0 10px rgba(61, 220, 151, 0.06), 0 18px 50px rgba(26, 152, 255, 0.18);
-  transition: transform 0.1s;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.85rem;
 }
-.power-big:active {
+.theme-close:active {
+  color: var(--text);
+  background: var(--surface);
+}
+@media (prefers-reduced-motion: reduce) {
+  .power-layout,
+  .power-slot,
+  .power-chrome-top,
+  .power-chrome-bottom,
+  .power-theme {
+    transition: none;
+    animation: none;
+  }
+}
+.power-dock {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.power-go {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+.power-go:active .dock-btn {
   transform: scale(0.94);
 }
-.power-big:disabled {
-  opacity: 0.6;
+.power-go:disabled {
+  opacity: 0.55;
 }
-.power-text h1 {
-  margin: 0 0 6px;
-  font-size: 1.35rem;
-}
-.power-text p {
-  margin: 0 auto;
-  max-width: 280px;
-  font-size: 0.85rem;
-  line-height: 1.45;
+.power-dock-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--muted);
 }
 .power-section {
@@ -1744,24 +1861,6 @@ body[data-app="jellyfin"] {
   line-height: 1.3;
   text-align: center;
 }
-.power-fullscreen {
-  height: 46px;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  color: var(--text);
-  font-weight: 600;
-  font-size: 0.85rem;
-}
-.power-fullscreen.on {
-  border-color: var(--focus);
-  color: var(--focus);
-}
-
 
 /* ---------- Power screen: themes previewed with their wallpaper ---------- */
 .theme-cards.two {
@@ -1855,10 +1954,6 @@ body[data-app="jellyfin"] {
   opacity: 0.6;
 }
 
-.power-screen > .power-fullscreen {
-  align-self: stretch;
-}
-
 /* A bigger OK circle; only taps inside it count as OK. */
 .pad-ok {
   width: 100px;
@@ -1875,27 +1970,6 @@ body[data-app="jellyfin"] {
 .wall-sites {
   display: flex;
   gap: 6px;
-}
-.power-tools {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-}
-.power-tool {
-  width: 52px;
-  height: 52px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.power-tool svg {
-  font-size: 1.25rem;
-}
-.power-tool.on {
-  border-color: var(--focus);
-  color: var(--focus);
 }
 .wall-sites .pill-btn {
   height: 26px;

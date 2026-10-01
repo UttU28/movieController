@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowUpRightFromSquare, faCheck, faCompress, faExpand, faPalette, faPlus, faPowerOff, faRotate, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { addWallpaper, errorMessage, getWallpapers, reloadQr, removeWallpaper, selectWallpaper } from "../lib/api";
+import { MarqueeTitle } from "./NowShowing";
 import { buzz } from "./RemoteButton";
 
 // Where to find wallpapers: copy a wallpaper's page link and paste it below.
@@ -60,12 +61,30 @@ function useWallpapers() {
   };
 }
 
-// What the phone shows while the remote is powered off: the power button,
-// the Home screen's theme (Dark / Live), the Live wallpaper collection, and
-// fullscreen for the Home screen.
+// What the phone shows while the remote is powered off: a short status,
+// the last title and app, and Turn on. The Home screen editor stays behind Theme.
 const APP_NAMES = { youtube: "YouTube", prime: "Prime Video", netflix: "Netflix", jellyfin: "Jellyfin" };
 
-export default function PowerScreen({ mode, tvMode, busy, pcOn, lastApp, onPowerOn, onTheme, onFullscreen }) {
+function ToolButton({ icon, label, active = false, disabled = false, spin = false, pressed, expanded, onPress }) {
+  return (
+    <button
+      type="button"
+      className={`rbtn${active ? " active" : ""}`}
+      disabled={disabled}
+      aria-pressed={pressed}
+      aria-expanded={expanded}
+      onClick={() => {
+        buzz();
+        onPress();
+      }}
+    >
+      <FontAwesomeIcon icon={icon} spin={spin} />
+      <span>{label}</span>
+    </button>
+  );
+}
+
+export default function PowerScreen({ mode, tvMode, busy, pcOn, lastApp, nowPlaying, onPowerOn, onTheme, onFullscreen }) {
   const appName = APP_NAMES[lastApp];
   const papers = useWallpapers();
   const [link, setLink] = useState("");
@@ -74,80 +93,57 @@ export default function PowerScreen({ mode, tvMode, busy, pcOn, lastApp, onPower
   const items = papers.data?.items || [];
   const selected = papers.data?.selected || {};
   const posterFor = (themeId) => items.find((i) => i.id === selected[themeId])?.poster;
+  const title = (nowPlaying || "").trim();
+  const sub = pcOn ? "Turn on to open the remote." : "Playback is paused.";
+
+  const closeThemes = () => setThemesOpen(false);
 
   return (
-    <section className="power-screen">
-      <button
-        type="button"
-        className="power-big"
-        aria-label="Turn the remote on"
-        disabled={busy}
-        onClick={() => {
-          buzz();
-          onPowerOn();
-        }}
-      >
-        <FontAwesomeIcon icon={faPowerOff} />
-      </button>
-      <div className="power-text">
-        <h1>{pcOn ? "Remote is ready" : "Remote is off"}</h1>
-        <p>
-          {pcOn
-            ? `The PC is on ${appName || "an app"}. Tap to open its remote.`
-            : `Playback is paused and the PC is showing the Home screen. Tap to turn on${appName ? ` and go back to ${appName}` : ""}.`}
-        </p>
+    <section className={`power-layout${themesOpen ? " themes-open" : ""}`}>
+      <div className="power-slot" inert={themesOpen}>
+        <div className="power-chrome-top">
+          <section className="card titlebar">
+            <div className="titlebar-row">
+              <div className="titlebar-text">
+                <span className="eyebrow">{pcOn ? "Ready" : "Standby"}</span>
+                <div className="player-title">{pcOn ? "Remote is ready" : "Remote is off"}</div>
+                <div className="selected-sub">{sub}</div>
+              </div>
+            </div>
+          </section>
+
+          {(title || appName) && (
+            <section className="card titlebar">
+              <div className="titlebar-row">
+                <div className="titlebar-text">
+                  <span className="eyebrow">Last playing</span>
+                  <MarqueeTitle text={title || appName} />
+                  {title && appName ? <div className="selected-sub">{appName}</div> : null}
+                </div>
+              </div>
+            </section>
+          )}
+        </div>
       </div>
 
-      <div className="power-tools">
-        <button
-          type="button"
-          className="pill-btn power-tool"
-          aria-label="Reload the Home screen"
-          disabled={reloading}
-          onClick={async () => {
-            buzz();
-            setReloading(true);
-            try {
-              await reloadQr();
-            } catch {
-              // The QR tab stays as it is; the button just stops spinning.
-            } finally {
-              setReloading(false);
-            }
-          }}
-        >
-          <FontAwesomeIcon icon={faRotate} spin={reloading} />
-        </button>
-        <button
-          type="button"
-          className={`pill-btn power-tool${themesOpen ? " on" : ""}`}
-          aria-label="Theme"
-          aria-expanded={themesOpen}
-          onClick={() => {
-            buzz();
-            setThemesOpen((open) => !open);
-          }}
-        >
-          <FontAwesomeIcon icon={faPalette} />
-        </button>
-        <button
-          type="button"
-          className={`pill-btn power-tool${tvMode ? " on" : ""}`}
-          aria-label={tvMode ? "Exit fullscreen" : "Fullscreen"}
-          aria-pressed={!!tvMode}
-          onClick={() => {
-            buzz();
-            onFullscreen();
-          }}
-        >
-          <FontAwesomeIcon icon={tvMode ? faCompress : faExpand} />
-        </button>
-      </div>
-
-      {themesOpen && (
-      <>
+      <div className="power-scroll">
+        {themesOpen && (
+        <div className="power-theme">
+          <div className="theme-head">
+            <span className="eyebrow">Home screen</span>
+            <button
+              type="button"
+              className="theme-close"
+              aria-label="Close"
+              onClick={() => {
+                buzz();
+                closeThemes();
+              }}
+            >
+              <FontAwesomeIcon icon={faXmark} />
+            </button>
+          </div>
       <div className="power-section">
-        <span className="eyebrow">Home screen</span>
         <div className="theme-cards two" role="radiogroup" aria-label="Home screen theme">
           {THEMES.map((t) => {
             const poster = posterFor(t.id);
@@ -250,8 +246,64 @@ export default function PowerScreen({ mode, tvMode, busy, pcOn, lastApp, onPower
         </form>
         {papers.error && <div className="error">{papers.error}</div>}
       </div>
-      </>
-      )}
+        </div>
+        )}
+      </div>
+
+      <div className="row three">
+        <ToolButton
+          icon={faRotate}
+          label="Reload"
+          spin={reloading}
+          disabled={reloading}
+          onPress={async () => {
+            setReloading(true);
+            try {
+              await reloadQr();
+            } catch {
+              // The Home screen stays as it is; the button just stops spinning.
+            } finally {
+              setReloading(false);
+            }
+          }}
+        />
+        <ToolButton
+          icon={faPalette}
+          label="Theme"
+          active={themesOpen}
+          expanded={themesOpen}
+          onPress={() => setThemesOpen((open) => !open)}
+        />
+        <ToolButton
+          icon={tvMode ? faCompress : faExpand}
+          label="Full"
+          active={!!tvMode}
+          pressed={!!tvMode}
+          onPress={onFullscreen}
+        />
+      </div>
+
+      <div className="power-slot bottom" inert={themesOpen}>
+        <div className="power-chrome-bottom">
+      <div className="dock power-dock">
+        <button
+          type="button"
+          className="power-go"
+          aria-label="Turn the remote on"
+          disabled={busy}
+          onClick={() => {
+            buzz();
+            onPowerOn();
+          }}
+        >
+          <span className="dock-btn main">
+            <FontAwesomeIcon icon={faPowerOff} />
+          </span>
+          <span className="power-dock-label">Turn on</span>
+        </button>
+      </div>
+        </div>
+      </div>
     </section>
   );
 }

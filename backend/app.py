@@ -192,6 +192,10 @@ def get_state(app: str = "youtube"):
     finally:
         lock.release()
     _last_state[app] = state
+    player = (state or {}).get("player") or {}
+    title = player.get("title")
+    if isinstance(title, str) and title.strip() and app == MODE_STATE.get("lastApp"):
+        MODE_STATE["nowPlaying"] = title.strip()
     return state
 
 
@@ -212,6 +216,11 @@ def _mode_state():
     except Exception:
         pass  # Chrome busy or gone: power/theme are still right.
     paper = wallpapers.current(MODE_STATE["mode"]) or {}
+    if not MODE_STATE.get("nowPlaying"):
+        cached = _last_state.get(MODE_STATE.get("lastApp") or "") or {}
+        title = ((cached.get("player") or {}).get("title") or "")
+        if isinstance(title, str) and title.strip():
+            MODE_STATE["nowPlaying"] = title.strip()
     return {**MODE_STATE, "tvMode": tv, "wallpaper": {k: paper.get(k) for k in ("id", "title", "video", "poster")}}
 
 
@@ -219,6 +228,7 @@ def _remember_app(name):
     if name not in APPS or MODE_STATE["lastApp"] == name:
         return
     MODE_STATE["lastApp"] = name
+    MODE_STATE["nowPlaying"] = None
     try:
         LAST_APP_FILE.write_text(name, encoding="utf-8")
     except OSError:

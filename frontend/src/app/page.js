@@ -109,6 +109,7 @@ export default function Home() {
           tvMode={remote.tvMode}
           pcOn={remote.power === "on"}
           lastApp={remote.lastApp}
+          nowPlaying={remote.nowPlaying}
           busy={busy}
           onPowerOn={powerOn}
           onTheme={(mode) => run(() => setMode(mode), { mode })}
