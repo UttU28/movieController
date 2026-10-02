@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowUpRightFromSquare, faCheck, faCompress, faExpand, faPalette, faPlus, faPowerOff, faRotate, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faArrowUpRightFromSquare, faCheck, faChevronDown, faChevronUp, faCompress, faExpand, faImages, faPalette, faPlus, faPowerOff, faRotate, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { addWallpaper, errorMessage, getWallpapers, reloadQr, removeWallpaper, selectWallpaper } from "../lib/api";
 import { MarqueeTitle } from "./NowShowing";
 import { buzz } from "./RemoteButton";
@@ -13,9 +13,11 @@ const WALLPAPER_SITES = [
   { label: "wallper", url: "https://www.wallper.app/" },
 ];
 
+// The whole Home screen choice: two modes, nothing else. Dark shows just the
+// wallpaper, dimmed; Live shows it with the clock and QR at full brightness.
 const THEMES = [
-  { id: "night", label: "Dark", desc: "Dimmed, for a dark room" },
-  { id: "live", label: "Live", desc: "Full-brightness wallpaper" },
+  { id: "night", label: "Dark mode", desc: "Just the wallpaper, dimmed for the dark" },
+  { id: "live", label: "Live mode", desc: "Wallpaper, clock and QR at full brightness" },
 ];
 
 function useWallpapers() {
@@ -90,6 +92,9 @@ export default function PowerScreen({ mode, tvMode, busy, pcOn, lastApp, nowPlay
   const [link, setLink] = useState("");
   const [reloading, setReloading] = useState(false);
   const [themesOpen, setThemesOpen] = useState(false);
+  // Wallpaper picking hides behind one row, so the panel shows only the
+  // two modes unless it's opened.
+  const [papersOpen, setPapersOpen] = useState(false);
   const items = papers.data?.items || [];
   const selected = papers.data?.selected || {};
   const posterFor = (themeId) => items.find((i) => i.id === selected[themeId])?.poster;
@@ -162,7 +167,13 @@ export default function PowerScreen({ mode, tvMode, busy, pcOn, lastApp, nowPlay
                   onTheme(t.id);
                 }}
               >
-                <span className="theme-swatch" style={poster ? { backgroundImage: `url("${poster}")` } : undefined} />
+                <span className="theme-swatch" style={poster ? { backgroundImage: `url("${poster}")` } : undefined}>
+                  {mode === t.id && (
+                    <span className="theme-check">
+                      <FontAwesomeIcon icon={faCheck} />
+                    </span>
+                  )}
+                </span>
                 <span className="theme-label">{t.label}</span>
                 <span className="theme-desc">{t.desc}</span>
               </button>
@@ -171,6 +182,24 @@ export default function PowerScreen({ mode, tvMode, busy, pcOn, lastApp, nowPlay
         </div>
       </div>
 
+      <button
+        type="button"
+        className="papers-toggle"
+        aria-expanded={papersOpen}
+        onClick={() => {
+          buzz();
+          setPapersOpen((open) => !open);
+        }}
+      >
+        <FontAwesomeIcon icon={faImages} />
+        <span>Wallpapers</span>
+        <span className="papers-sub">{items.length ? `${items.length} saved` : "none yet"}</span>
+        <span className="papers-caret">
+          <FontAwesomeIcon icon={papersOpen ? faChevronUp : faChevronDown} />
+        </span>
+      </button>
+
+      {papersOpen && (
       <div className="power-section">
         <div className="wall-head">
           <span className="eyebrow">Live wallpaper</span>
@@ -249,6 +278,7 @@ export default function PowerScreen({ mode, tvMode, busy, pcOn, lastApp, nowPlay
         </form>
         {papers.error && <div className="error">{papers.error}</div>}
       </div>
+      )}
         </div>
         )}
       </div>

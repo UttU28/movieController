@@ -8,10 +8,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;800&display=swap" rel="stylesheet">
 <style>
-  /* The PC's Home screen: a looping video wallpaper, a lock-screen clock and
-     the QR code for the phone remote. No other text.
-     night  wallpaper and clock dimmed right down, to give off little light
-     live   wallpaper and clock at full brightness */
+  /* The PC's Home screen.
+     night  just the wallpaper, dimmed right down — no clock, no QR, so the
+            screen gives off as little light as possible
+     live   wallpaper, lock-screen clock and the QR code at full brightness */
   :root {
     --font: "Outfit", -apple-system, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", sans-serif;
     --wall-opacity: 0.38;
@@ -26,6 +26,18 @@
     --time: rgba(255, 255, 255, 0.96);
     --date: rgba(255, 255, 255, 0.85);
     --qr-dim: 1;
+  }
+
+  /* Dark mode shows the wallpaper and nothing else: the clock and the QR
+     code fade away, and return when Live is picked on the phone. */
+  .clock,
+  .qr {
+    transition: opacity 1s ease, visibility 0s linear 1s;
+  }
+  [data-mode="night"] .clock,
+  [data-mode="night"] .qr {
+    opacity: 0;
+    visibility: hidden;
   }
 
   * { box-sizing: border-box; }
