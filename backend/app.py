@@ -279,6 +279,7 @@ def _resume_last_app():
     except Exception as e:
         print(f"open {MODE_STATE['lastApp']} failed: {e}")
     _ensure_fullscreen()
+    laptop.settle()
 
 
 @app.get("/mode")
@@ -414,6 +415,7 @@ def _switch_to_qr():
             session.ensure_tv_mode()
         except Exception as e:
             print(f"switch to QR failed: {e}")
+    laptop.settle()
 
 
 @app.post("/qr/reload")
@@ -442,14 +444,20 @@ async def switch_app(request: Request):
         return {"status": "success", "app": name, "state": state}
     except WebDriverException as e:
         raise HTTPException(status_code=500, detail=str(e).splitlines()[0])
+    finally:
+        laptop.settle()
 
 
 @app.post("/launch")
 def launch(app: str = "youtube"):
     try:
-        return {"status": "success", "state": _web_app(app).show()}
-    except WebDriverException as e:
-        raise HTTPException(status_code=500, detail=str(e).splitlines()[0])
+        try:
+            state = _web_app(app).show()
+        except WebDriverException as e:
+            raise HTTPException(status_code=500, detail=str(e).splitlines()[0])
+        return {"status": "success", "state": state}
+    finally:
+        laptop.settle()
 
 
 # Sync work runs in FastAPI's threadpool; ChromeSession serialises access to
@@ -475,16 +483,21 @@ async def search_query(request: Request):
 def _run_web(name, action, value=None):
     remote = _web_app(name)
     try:
-        out = remote.run(action, value)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Busy as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except PageUnresponsive as e:
-        raise HTTPException(status_code=504, detail=str(e))
-    except (WebDriverException, RuntimeError) as e:
-        raise HTTPException(status_code=502, detail=(str(e).splitlines() or ["Chrome error"])[0])
-    return {"status": "success", "app": name, "action": action, **out}
+        try:
+            out = remote.run(action, value)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Busy as e:
+            raise HTTPException(status_code=503, detail=str(e))
+        except PageUnresponsive as e:
+            raise HTTPException(status_code=504, detail=str(e))
+        except (WebDriverException, RuntimeError) as e:
+            raise HTTPException(status_code=502, detail=(str(e).splitlines() or ["Chrome error"])[0])
+        return {"status": "success", "app": name, "action": action, **out}
+    finally:
+        # Clicks land the real pointer on the video. Move it off once the
+        # action is done, unless the laptop trackpad is in use.
+        laptop.settle()
 
 
 def _run_laptop(action, value=None):

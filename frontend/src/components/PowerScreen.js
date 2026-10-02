@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowUpRightFromSquare, faCheck, faCompress, faExpand, faPalette, faPlus, faPowerOff, faRotate, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { addWallpaper, errorMessage, getWallpapers, reloadQr, removeWallpaper, selectWallpaper } from "../lib/api";
-import { useRemoteStyle } from "../lib/remoteStyle";
 import { MarqueeTitle } from "./NowShowing";
 import { buzz } from "./RemoteButton";
 
@@ -17,12 +16,6 @@ const WALLPAPER_SITES = [
 const THEMES = [
   { id: "night", label: "Dark", desc: "Dimmed, for a dark room" },
   { id: "live", label: "Live", desc: "Full-brightness wallpaper" },
-];
-
-// How this phone looks. Chosen once, changeable any time from Theme.
-const REMOTE_STYLES = [
-  { id: "classic", label: "Default", desc: "Sharp tiles in each app's colour" },
-  { id: "neo", label: "Neomorphism", desc: "Soft extruded controls, one surface" },
 ];
 
 function useWallpapers() {
@@ -94,16 +87,9 @@ function ToolButton({ icon, label, active = false, disabled = false, spin = fals
 export default function PowerScreen({ mode, tvMode, busy, pcOn, lastApp, nowPlaying, onPowerOn, onTheme, onFullscreen }) {
   const appName = APP_NAMES[lastApp];
   const papers = useWallpapers();
-  const [style, setStyle] = useRemoteStyle();
   const [link, setLink] = useState("");
   const [reloading, setReloading] = useState(false);
   const [themesOpen, setThemesOpen] = useState(false);
-
-  // First time on this phone: open Theme straight away and ask which
-  // remote the person wants — Neomorphism or the classic one.
-  useEffect(() => {
-    if (!style) setThemesOpen(true);
-  }, [style]);
   const items = papers.data?.items || [];
   const selected = papers.data?.selected || {};
   const posterFor = (themeId) => items.find((i) => i.id === selected[themeId])?.poster;
@@ -147,15 +133,13 @@ export default function PowerScreen({ mode, tvMode, busy, pcOn, lastApp, nowPlay
         {themesOpen && (
         <div className="power-theme">
           <div className="theme-head">
-            <span className="eyebrow">{style ? "Home screen" : "What kind of remote do you want?"}</span>
+            <span className="eyebrow">Home screen</span>
             <button
               type="button"
               className="theme-close"
               aria-label="Close"
               onClick={() => {
                 buzz();
-                // Closing before picking a style means "the classic one".
-                if (!style) setStyle("classic");
                 closeThemes();
               }}
             >
@@ -163,30 +147,6 @@ export default function PowerScreen({ mode, tvMode, busy, pcOn, lastApp, nowPlay
             </button>
           </div>
       <div className="power-section">
-        <span className="eyebrow">Remote style</span>
-        <div className="theme-cards two" role="radiogroup" aria-label="Remote style">
-          {REMOTE_STYLES.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              role="radio"
-              aria-checked={style === s.id}
-              className={`theme-card style-${s.id}${style === s.id ? " on" : ""}`}
-              onClick={() => {
-                buzz();
-                setStyle(s.id);
-              }}
-            >
-              <span className={`rs-swatch ${s.id}`} aria-hidden="true" />
-              <span className="theme-label">{s.label}</span>
-              <span className="theme-desc">{s.desc}</span>
-            </button>
-          ))}
-        </div>
-        {!style && <div className="style-note">Pick one now, or close this panel to keep the default. Change it any time from Theme.</div>}
-      </div>
-      <div className="power-section">
-        <span className="eyebrow">Home screen theme</span>
         <div className="theme-cards two" role="radiogroup" aria-label="Home screen theme">
           {THEMES.map((t) => {
             const poster = posterFor(t.id);

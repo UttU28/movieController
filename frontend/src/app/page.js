@@ -3,13 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft, faPowerOff } from "@fortawesome/free-solid-svg-icons";
-import AppSwitcher from "../components/AppSwitcher";
+import AppSwitcher, { APPS as SWITCHER_APPS, slideMs } from "../components/AppSwitcher";
 import LaptopBubble from "../components/LaptopBubble";
 import LaptopDrawer from "../components/LaptopDrawer";
 import PowerScreen from "../components/PowerScreen";
 import { buzz } from "../components/RemoteButton";
 import { getMode, setMode, setPower, showApp, toggleTv } from "../lib/api";
-import { useRemoteStyle } from "../lib/remoteStyle";
 import usePcVolumeKeys from "../lib/usePcVolumeKeys";
 import JellyfinPanel from "../panels/JellyfinPanel";
 import LaptopPanel, { TrackpadStatus } from "../panels/LaptopPanel";
@@ -19,8 +18,6 @@ import YouTubePanel from "../panels/YouTubePanel";
 
 const WEB_APPS = new Set(["youtube", "prime", "netflix", "jellyfin"]);
 const THEME_COLORS = { laptop: "#0d0e12", youtube: "#0f0f0f", prime: "#0b1219", netflix: "#141414", jellyfin: "#0e1116" };
-// Neomorphism lifts each surface off black so its soft shadows have room.
-const THEME_COLORS_NEO = { laptop: "#252836", youtube: "#232428", prime: "#1f2a38", netflix: "#282629", jellyfin: "#242a38" };
 const POLL_MS = 4000;
 // After picking an app here, ignore polls that still report the old one.
 const PICK_HOLD_MS = 6000;
@@ -38,24 +35,40 @@ export default function Home() {
   const [laptop, setLaptop] = useState(null); // null | "drawer" | "full"
   const [drawerClose, setDrawerClose] = useState(0);
   const [padStatus, setPadStatus] = useState("connecting");
+  // How far the switcher just travelled, so the panel slides in from the side
+  // you came from over the same time as the highlight.
+  const [slide, setSlide] = useState(null);
+  const appRef = useRef(null);
+  appRef.current = app;
   usePcVolumeKeys();
 
+  const appIndex = (id) => SWITCHER_APPS.findIndex((a) => a.id === id);
+
+  // Move to an app and remember which way the switcher went.
+  const goTo = (next) => {
+    const steps = appIndex(next) - appIndex(appRef.current);
+    setSlide(appRef.current && Number.isFinite(steps) ? steps || null : null);
+    setApp(next);
+  };
+
   // The full laptop page uses the laptop theme; otherwise the app's.
-  const [style] = useRemoteStyle();
   const themeApp = laptop === "full" ? "laptop" : app;
   useEffect(() => {
     if (!themeApp) return;
     document.body.dataset.app = themeApp;
-    const colors = style === "neo" ? THEME_COLORS_NEO : THEME_COLORS;
-    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", colors[themeApp]);
-  }, [themeApp, style]);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLORS[themeApp]);
+  }, [themeApp]);
 
   // Keep power / theme in step with the backend (another phone may change it).
   // Also follows the last app (another phone may have switched apps).
   const apply = useCallback((m) => {
     setRemote(m);
-    if (m?.lastApp && WEB_APPS.has(m.lastApp) && Date.now() - pickedAt.current > PICK_HOLD_MS) setApp(m.lastApp);
+    if (m?.lastApp && WEB_APPS.has(m.lastApp) && Date.now() - pickedAt.current > PICK_HOLD_MS) {
+      if (m.lastApp !== appRef.current) goTo(m.lastApp);
+    }
     return m;
+    // goTo only reads refs, so it never goes stale.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const refresh = useCallback(async () => {
@@ -85,7 +98,7 @@ export default function Home() {
   };
 
   const choose = (next) => {
-    setApp(next);
+    goTo(next);
     pickedAt.current = Date.now();
     setRemote((r) => ({ ...r, lastApp: next }));
     // Picking a web app switches Chrome to its tab; the backend remembers it
@@ -102,6 +115,7 @@ export default function Home() {
   // app's remote.
   const powerOn = () => {
     setStandby(false);
+    setSlide(null);
     if (remote.lastApp) setApp(remote.lastApp);
     run(() => setPower(true), { power: "on" });
   };
@@ -142,8 +156,14 @@ export default function Home() {
     );
   }
 
+  // A panel that follows the switcher slides in sideways; anything else
+  // (power on, first load) keeps the gentle lift.
+  const panelMotion = slide
+    ? { "--panel-x": `${slide > 0 ? 34 : -34}px`, "--panel-y": "0px", "--panel-ms": `${slideMs(slide)}ms` }
+    : undefined;
+
   return (
-    <main className="remote">
+    <main className="remote" style={panelMotion}>
       <header className="topbar">
         <div className="topbar-inner">
           {app && <AppSwitcher app={app} onChange={choose} />}

@@ -426,6 +426,7 @@ button {
 
 /* App switcher */
 .switcher {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 6px;
@@ -436,6 +437,7 @@ button {
 }
 .switch-tab {
   position: relative;
+  z-index: 1;
   background: transparent;
   border-radius: 12px;
   padding: 8px 0 6px;
@@ -445,25 +447,41 @@ button {
   gap: 4px;
   font-size: 1.05rem;
   color: var(--muted);
-  transition: background 0.15s, color 0.15s;
+  transition: color 0.15s;
 }
 .switch-tab span {
   font-size: 0.68rem;
   font-weight: 700;
 }
-.switch-tab.on {
-  color: white;
+/* The highlight is one pill that slides between tabs, so picking Netflix from
+   YouTube visibly travels past Prime. */
+.switch-pill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 0;
+  border-radius: 12px;
+  transition: transform cubic-bezier(0.34, 1.12, 0.3, 1), background 0.3s ease;
+  will-change: transform;
 }
-.switch-tab.on[data-app="laptop"] {
+.switch-tab.on,
+.switch-tab.leaving,
+.switch-tab.crossing {
+  color: #fff;
+}
+.switch-tab.crossing {
+  transition: color 0.1s;
+}
+.switch-pill[data-app="laptop"] {
   background: linear-gradient(135deg, #8b6dff, #5b3fd6);
 }
-.switch-tab.on[data-app="youtube"] {
+.switch-pill[data-app="youtube"] {
   background: linear-gradient(135deg, #ff3355, #c4002b);
 }
-.switch-tab.on[data-app="prime"] {
+.switch-pill[data-app="prime"] {
   background: linear-gradient(135deg, #38a9ff, #0b64c9);
 }
-.switch-tab.on[data-app="netflix"] {
+.switch-pill[data-app="netflix"] {
   background: linear-gradient(135deg, #f0212c, #9c0710);
 }
 
@@ -693,7 +711,7 @@ button {
   visibility: hidden;
 }
 
-.switch-tab.on[data-app="jellyfin"] {
+.switch-pill[data-app="jellyfin"] {
   background: linear-gradient(135deg, #aa5cc3, #00a4dc);
 }
 
@@ -1515,7 +1533,7 @@ body[data-app="jellyfin"] {
 }
 
 /* A soft wash of the app colour, only in a few places. */
-.switch-tab.on {
+.switch-pill {
   box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 .media-layout .titlebar {
@@ -1651,19 +1669,30 @@ body[data-app="jellyfin"] {
 }
 
 /* ---------- Power-off screen: same frame as a media remote ---------- */
+/* The page itself scrolls. Nothing inside the screen is its own scroller. */
+html:has(.power-layout),
+html:has(.power-layout) body {
+  scrollbar-width: none;
+}
+html:has(.power-layout)::-webkit-scrollbar,
+html:has(.power-layout) body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
 .remote:has(.power-layout) {
-  height: 100dvh;
+  min-height: 100dvh;
   box-sizing: border-box;
-  padding-bottom: 0;
-  overflow: hidden;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  overflow: visible;
 }
 .power-layout {
-  flex: 1;
-  min-height: 0;
+  flex: 1 0 auto;
+  min-height: calc(100dvh - 14px - 12px - env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 10px;
-  overflow: hidden;
+  overflow: visible;
   transition: gap 0.48s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .power-layout.themes-open {
@@ -1674,6 +1703,7 @@ body[data-app="jellyfin"] {
   display: grid;
   grid-template-rows: 1fr;
   min-height: 0;
+  overflow: hidden;
   transition: grid-template-rows 0.48s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .power-layout.themes-open .power-slot {
@@ -1710,7 +1740,14 @@ body[data-app="jellyfin"] {
   margin: 0;
 }
 .power-layout.themes-open > .row {
-  padding-bottom: calc(4px + env(safe-area-inset-bottom));
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  margin: 0 -16px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
 }
 .power-layout .rbtn.active {
   background: color-mix(in srgb, var(--focus) 16%, var(--surface));
@@ -1723,9 +1760,9 @@ body[data-app="jellyfin"] {
     var(--surface);
 }
 .power-scroll {
-  flex: 1;
+  flex: 1 0 auto;
   min-height: 0;
-  overflow-y: auto;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1734,7 +1771,7 @@ body[data-app="jellyfin"] {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  min-height: 100%;
+  padding-bottom: 8px;
   animation: power-theme-in 0.48s cubic-bezier(0.22, 1, 0.36, 1);
 }
 @keyframes power-theme-in {
@@ -2177,7 +2214,7 @@ body[data-app="jellyfin"] {
 }
 
 /* ================================================================
-   POWER SCREEN — proper hero, both styles
+   POWER SCREEN
    ================================================================ */
 .power-dot {
   width: 7px;
@@ -2200,365 +2237,13 @@ body[data-app="jellyfin"] {
 .power-go:active .dock-btn.main {
   transform: scale(0.95);
 }
-.style-note {
-  font-size: 0.68rem;
-  color: var(--muted);
-}
-
-/* Remote-style picker swatches (mini previews of each look) */
-.rs-swatch {
-  width: 100%;
-  height: 72px;
-  border-radius: 11px;
-  position: relative;
-  overflow: hidden;
-}
-.rs-swatch.classic {
-  background: #101116;
-  border: 1px solid #333338;
-}
-.rs-swatch.classic::before {
-  content: "";
-  position: absolute;
-  left: 12px;
-  right: 40px;
-  top: 16px;
-  height: 9px;
-  border-radius: 5px;
-  background: linear-gradient(90deg, #ff3355, #c4002b);
-}
-.rs-swatch.classic::after {
-  content: "";
-  position: absolute;
-  left: 12px;
-  right: 58px;
-  top: 36px;
-  height: 9px;
-  border-radius: 5px;
-  background: #34353c;
-  box-shadow: 0 14px 0 #34353c;
-}
-.rs-swatch.neo {
-  background: #26272c;
-  box-shadow: inset 4px 4px 8px rgba(0, 0, 0, 0.55), inset -4px -4px 8px rgba(255, 255, 255, 0.07);
-}
-.rs-swatch.neo::before {
-  content: "";
-  position: absolute;
-  left: 10px;
-  top: 28px;
-  width: 44px;
-  height: 16px;
-  border-radius: 8px;
-  background: #26272c;
-  box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.55), -3px -3px 6px rgba(255, 255, 255, 0.08);
-}
-.rs-swatch.neo::after {
-  content: "";
-  position: absolute;
-  right: 14px;
-  top: 24px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: #26272c;
-  box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.55), -3px -3px 6px rgba(255, 255, 255, 0.08),
-    inset 0 0 0 2px rgba(255, 45, 85, 0.55);
-}
-
 /* ================================================================
-   NEOMORPHISM — one surface. Controls extrude from the base with a
-   light/dark shadow pair and sink back in when pressed. Surfaces lift
-   off black so the shadows have room to read.
-   ================================================================ */
-body[data-style="neo"] {
-  --bg: #24262d;
-  --surface: var(--bg);
-  --surface-2: color-mix(in srgb, var(--bg) 80%, black);
-  --line: transparent;
-  /* Translucent shades: depth without a bright halo or a muddy edge. */
-  --neo-hi: rgba(255, 255, 255, 0.08);
-  --neo-lo: rgba(0, 0, 0, 0.45);
-  --neo-raise: 8px 8px 18px var(--neo-lo), -8px -8px 18px var(--neo-hi);
-  --neo-raise-sm: 4px 4px 10px var(--neo-lo), -4px -4px 10px var(--neo-hi);
-  /* For cards that sit in a clipped container (power screen): smaller bleed,
-     so the container's edge can't cut a visible line in the shadow. */
-  --neo-raise-xs: 2px 3px 7px var(--neo-lo), -2px -2px 7px var(--neo-hi);
-  --neo-raise-lg: 12px 12px 30px rgba(0, 0, 0, 0.55), 8px 8px 18px var(--neo-lo), -8px -8px 18px var(--neo-hi);
-  --neo-sink: inset 5px 5px 12px var(--neo-lo), inset -5px -5px 12px var(--neo-hi);
-  --neo-sink-sm: inset 3px 3px 8px var(--neo-lo), inset -3px -3px 8px var(--neo-hi);
-}
-body[data-style="neo"][data-app="laptop"] { --bg: #252836; }
-body[data-style="neo"][data-app="youtube"] { --bg: #232428; }
-body[data-style="neo"][data-app="prime"] { --bg: #1f2a38; }
-body[data-style="neo"][data-app="netflix"] { --bg: #282629; }
-body[data-style="neo"][data-app="jellyfin"] { --bg: #242a38; }
-
-/* Cards and tiles extrude; borders would fight the shadows. */
-body[data-style="neo"] .card,
-body[data-style="neo"] .rbtn,
-body[data-style="neo"] .theme-card,
-body[data-style="neo"] .wall-card,
-body[data-style="neo"] .jf-poster,
-body[data-style="neo"] .result,
-body[data-style="neo"] .episode,
-body[data-style="neo"] .jf-list-item,
-body[data-style="neo"] .back-btn,
-body[data-style="neo"] .next-episode {
-  background: var(--bg);
-  border: 0;
-  box-shadow: var(--neo-raise-sm);
-}
-body[data-style="neo"] .results-sheet,
-body[data-style="neo"] .drawer {
-  border: 0;
-  box-shadow: var(--neo-raise-lg), 0 18px 40px rgba(0, 0, 0, 0.55);
-}
-body[data-style="neo"] .drawer {
-  background: var(--bg);
-  --surface: var(--bg);
-  --surface-2: color-mix(in srgb, var(--bg) 80%, black);
-  --line: transparent;
-}
-
-/* Pressed = sunk into the surface. */
-body[data-style="neo"] .rbtn:active,
-body[data-style="neo"] .theme-card:active,
-body[data-style="neo"] .result:active,
-body[data-style="neo"] .episode:active,
-body[data-style="neo"] .jf-list-item:active,
-body[data-style="neo"] .jf-tile:active .jf-poster,
-body[data-style="neo"] .next-episode:active,
-body[data-style="neo"] .back-btn:active {
-  transform: none;
-  background: var(--surface-2);
-  box-shadow: var(--neo-sink-sm);
-}
-
-/* Selected states sink into the surface and tint with the app's brand
-   colour — no outer ring, no blue. */
-body[data-style="neo"] .rbtn.active,
-body[data-style="neo"] .theme-card.on,
-body[data-style="neo"] .wall-card.on,
-body[data-style="neo"] .pill-btn.on,
-body[data-style="neo"] .power-layout .rbtn.active {
-  box-shadow: var(--neo-sink-sm);
-  background: var(--surface-2);
-  border: 0;
-  color: var(--accent);
-}
-body[data-style="neo"] .theme-card.on .theme-label,
-body[data-style="neo"] .wall-card.on .wall-title {
-  color: var(--accent);
-}
-body[data-style="neo"] .search input:focus,
-body[data-style="neo"] .titlebar-search input:focus {
-  box-shadow: var(--neo-sink-sm), 0 0 0 2px color-mix(in srgb, var(--accent) 65%, transparent);
-}
-body[data-style="neo"] .selected-icon,
-body[data-style="neo"] .pad-arrow.lit,
-body[data-style="neo"] .dpad-arrow:active {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  color: var(--accent);
-}
-
-/* Brand-filled controls keep their gradient; the extrusion comes along. */
-body[data-style="neo"] .rbtn.accent,
-body[data-style="neo"] .pill-btn.accent,
-body[data-style="neo"] .play-main,
-body[data-style="neo"] .segmented button.on,
-body[data-style="neo"] .search .send-btn {
-  box-shadow: var(--neo-raise-sm), 0 8px 22px color-mix(in srgb, var(--accent) 40%, transparent);
-}
-body[data-style="neo"] .launch,
-body[data-style="neo"] .skip-ad,
-body[data-style="neo"] .chip.on {
-  box-shadow: var(--neo-raise-sm);
-}
-
-/* App switcher: a sunk tray; the active tab pops out in brand colour. */
-body[data-style="neo"] .switcher {
-  background: var(--surface-2);
-  border: 0;
-  box-shadow: var(--neo-sink-sm);
-}
-body[data-style="neo"] .switch-tab.on {
-  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 35%, transparent), var(--neo-raise-sm);
-}
-
-/* Inputs, pills, and small round buttons. */
-body[data-style="neo"] .search input,
-body[data-style="neo"] .titlebar-search input {
-  background: var(--surface-2);
-  border: 0;
-  box-shadow: var(--neo-sink-sm);
-}
-body[data-style="neo"] .search input:focus,
-body[data-style="neo"] .titlebar-search input:focus {
-  box-shadow: var(--neo-sink-sm), 0 0 0 2px var(--focus);
-}
-body[data-style="neo"] .chip,
-body[data-style="neo"] .pill-btn,
-body[data-style="neo"] .search button,
-body[data-style="neo"] .titlebar-btn,
-body[data-style="neo"] .jf-icon-btn,
-body[data-style="neo"] .theme-close {
-  background: var(--bg);
-  border: 0;
-  box-shadow: var(--neo-raise-sm);
-}
-body[data-style="neo"] .chip:active,
-body[data-style="neo"] .pill-btn:active,
-body[data-style="neo"] .search button:active,
-body[data-style="neo"] .titlebar-btn:active,
-body[data-style="neo"] .jf-icon-btn:active,
-body[data-style="neo"] .theme-close:active,
-body[data-style="neo"] .power-btn:active {
-  transform: none;
-  box-shadow: var(--neo-sink-sm);
-  background: var(--surface-2);
-}
-body[data-style="neo"] .titlebar-btn:active {
-  background: var(--accent);
-  color: var(--accent-ink);
-  box-shadow: var(--neo-sink-sm);
-}
-body[data-style="neo"] .result-len {
-  background: var(--surface-2);
-  box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.45);
-}
-
-/* Swipe pad and d-pad: wells carved out of the surface. */
-body[data-style="neo"] .swipepad {
-  background: var(--surface-2);
-  border: 0;
-  box-shadow: var(--neo-sink);
-}
-body[data-style="neo"] .swipepad:active {
-  border: 0;
-}
-body[data-style="neo"] .dpad {
-  background: var(--surface-2);
-  border: 0;
-  box-shadow: var(--neo-sink), 0 1px 0 var(--neo-hi);
-}
-body[data-style="neo"] .pad-ok,
-body[data-style="neo"] .dpad-ok {
-  background:
-    linear-gradient(var(--bg), var(--bg)) padding-box,
-    linear-gradient(135deg, var(--accent), var(--accent-2)) border-box;
-  border: 2px solid transparent;
-  box-shadow: var(--neo-raise), 0 10px 24px color-mix(in srgb, var(--accent) 25%, transparent);
-}
-body[data-style="neo"] .dpad-ok {
-  border: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
-  background: var(--bg);
-}
-body[data-style="neo"] .pad-ok.lit,
-body[data-style="neo"] .dpad-ok:active {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: var(--accent-ink);
-  border-color: transparent;
-  box-shadow: var(--neo-sink), 0 0 18px color-mix(in srgb, var(--accent) 45%, transparent);
-}
-
-/* Progress lines sit in shallow grooves. */
-body[data-style="neo"] .progress,
-body[data-style="neo"] .titlebar-progress,
-body[data-style="neo"] .jf-progress.inline {
-  background: var(--surface-2);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
-}
-body[data-style="neo"] .titlebar-progress {
-  left: 12px;
-  right: 12px;
-  bottom: 8px;
-  height: 5px;
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-/* Dock: the same surface, lifted by its own shadow. */
-body[data-style="neo"] .dock,
-body[data-style="neo"] .media-layout > .dock {
-  background: var(--bg);
-  border-top: 1px solid color-mix(in srgb, var(--text) 6%, transparent);
-  box-shadow: 0 -14px 30px rgba(0, 0, 0, 0.5), 0 -1px 0 var(--neo-hi);
-}
-body[data-style="neo"] .dock-btn {
-  background: var(--bg);
-  border: 0;
-  box-shadow: var(--neo-raise-sm);
-}
-body[data-style="neo"] .dock-btn:active {
-  background: var(--surface-2);
-  transform: none;
-  box-shadow: var(--neo-sink-sm);
-}
-body[data-style="neo"] .dock-btn.main,
-body[data-style="neo"] .dock-btn.main:active {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: var(--accent-ink);
-  box-shadow: var(--neo-raise-sm), 0 10px 26px color-mix(in srgb, var(--accent) 45%, transparent);
-}
-body[data-style="neo"] .power-go .dock-btn.main {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: var(--accent-ink);
-  box-shadow: var(--neo-raise), 0 14px 30px color-mix(in srgb, var(--accent) 45%, transparent);
-}
-/* The dock's glow gets clipped where the power screen's chrome box ends;
-   keep only the hairline there. */
-body[data-style="neo"] .power-chrome-bottom .dock {
-  box-shadow: 0 -1px 0 color-mix(in srgb, var(--text) 7%, transparent);
-}
-body[data-style="neo"] .power-layout .card {
-  box-shadow: var(--neo-raise-xs);
-}
-
-/* Power tile in the top bar and the segmented toggle. */
-body[data-style="neo"] .power-btn {
-  background: var(--bg);
-  border: 0;
-  box-shadow: var(--neo-raise-sm);
-}
-body[data-style="neo"] .power-btn:active {
-  color: #ff5a5f;
-}
-body[data-style="neo"] .segmented {
-  background: var(--surface-2);
-  border: 0;
-  box-shadow: var(--neo-sink-sm);
-}
-
-/* Trackpad is a well with the accent glow inside it. */
-body[data-style="neo"] .trackpad {
-  border: 0;
-  box-shadow: var(--neo-sink);
-}
-body[data-style="neo"] .trackpad:active {
-  border: 0;
-  box-shadow: var(--neo-sink), 0 0 0 2px var(--accent);
-}
-
-/* Selection outlines on posters. */
-body[data-style="neo"] .jf-tile:active .jf-poster {
-  outline: 0;
-}
-body[data-style="neo"] .sheet-head {
-  background: var(--bg);
-}
-body[data-style="neo"] .theme-head {
-  background: color-mix(in srgb, var(--bg) 92%, transparent);
-}
-
-/* ================================================================
-   Motion — panels glide in when the app (or the remote's power)
-   changes, and surfaces ease when the style is switched.
+   Motion — panels glide in when the app (or the remote's power) changes.
    ================================================================ */
 @keyframes remote-panel-in {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translate3d(var(--panel-x, 0px), var(--panel-y, 12px), 0);
   }
   to {
     opacity: 1;
@@ -2569,40 +2254,14 @@ body[data-style="neo"] .theme-head {
   .media-layout,
   .laptop,
   .power-layout {
-    animation: remote-panel-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: remote-panel-in var(--panel-ms, 300ms) cubic-bezier(0.22, 1, 0.36, 1) both;
   }
   .switch-tab:active {
     transform: scale(0.92);
   }
-  /* Switching Default <-> Neomorphism cross-fades the surfaces instead of
-     snapping every edge at once. */
-  .card,
-  .rbtn,
-  .chip,
-  .pill-btn,
-  .switcher,
-  .swipepad,
-  .dpad,
-  .pad-ok,
-  .dpad-ok,
-  .dock,
-  .dock-btn,
-  .theme-card,
-  .wall-card,
-  .search input,
-  .titlebar-search input,
-  .segmented,
-  .power-btn,
-  .titlebar-btn,
-  .search button,
-  .jf-icon-btn,
-  .theme-close,
-  .back-btn,
-  .result,
-  .episode,
-  .jf-list-item,
-  .jf-poster {
-    transition: box-shadow 0.35s ease, background-color 0.3s ease, color 0.3s ease,
-      border-color 0.3s ease, transform 0.1s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .switch-pill {
+    transition: none;
   }
 }
