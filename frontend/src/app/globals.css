@@ -2175,3 +2175,347 @@ body[data-app="jellyfin"] {
   background: rgba(124, 92, 255, 0.45);
   border-color: #b9a6ff;
 }
+
+/* ================================================================
+   POWER SCREEN — proper hero, both styles
+   ================================================================ */
+.power-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: none;
+}
+.power-dot.on {
+  background: var(--green);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--green) 70%, transparent);
+}
+.power-go .dock-btn.main {
+  width: 84px;
+  height: 84px;
+  font-size: 1.8rem;
+  box-shadow: 0 14px 36px color-mix(in srgb, var(--accent) 50%, transparent),
+    inset 0 0 0 6px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.power-go:active .dock-btn.main {
+  transform: scale(0.95);
+}
+.style-note {
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+/* Remote-style picker swatches (mini previews of each look) */
+.rs-swatch {
+  width: 100%;
+  height: 72px;
+  border-radius: 11px;
+  position: relative;
+  overflow: hidden;
+}
+.rs-swatch.classic {
+  background: #101116;
+  border: 1px solid #333338;
+}
+.rs-swatch.classic::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 40px;
+  top: 16px;
+  height: 9px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #ff3355, #c4002b);
+}
+.rs-swatch.classic::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 58px;
+  top: 36px;
+  height: 9px;
+  border-radius: 5px;
+  background: #34353c;
+  box-shadow: 0 14px 0 #34353c;
+}
+.rs-swatch.neo {
+  background: #26272c;
+  box-shadow: inset 4px 4px 8px rgba(0, 0, 0, 0.55), inset -4px -4px 8px rgba(255, 255, 255, 0.07);
+}
+.rs-swatch.neo::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 28px;
+  width: 44px;
+  height: 16px;
+  border-radius: 8px;
+  background: #26272c;
+  box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.55), -3px -3px 6px rgba(255, 255, 255, 0.08);
+}
+.rs-swatch.neo::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  top: 24px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #26272c;
+  box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.55), -3px -3px 6px rgba(255, 255, 255, 0.08),
+    inset 0 0 0 2px rgba(255, 45, 85, 0.55);
+}
+
+/* ================================================================
+   NEOMORPHISM — one surface. Controls extrude from the base with a
+   light/dark shadow pair and sink back in when pressed. Surfaces lift
+   off black so the shadows have room to read.
+   ================================================================ */
+body[data-style="neo"] {
+  --bg: #24262d;
+  --surface: var(--bg);
+  --surface-2: color-mix(in srgb, var(--bg) 80%, black);
+  --line: transparent;
+  --neo-hi: color-mix(in srgb, var(--bg) 84%, white);
+  --neo-lo: color-mix(in srgb, var(--bg) 50%, black);
+  --neo-raise: 8px 8px 18px var(--neo-lo), -8px -8px 18px var(--neo-hi);
+  --neo-raise-sm: 4px 4px 10px var(--neo-lo), -4px -4px 10px var(--neo-hi);
+  --neo-raise-lg: 12px 12px 30px rgba(0, 0, 0, 0.55), 8px 8px 18px var(--neo-lo), -8px -8px 18px var(--neo-hi);
+  --neo-sink: inset 5px 5px 12px var(--neo-lo), inset -5px -5px 12px var(--neo-hi);
+  --neo-sink-sm: inset 3px 3px 8px var(--neo-lo), inset -3px -3px 8px var(--neo-hi);
+}
+body[data-style="neo"][data-app="laptop"] { --bg: #252836; }
+body[data-style="neo"][data-app="youtube"] { --bg: #232428; }
+body[data-style="neo"][data-app="prime"] { --bg: #1f2a38; }
+body[data-style="neo"][data-app="netflix"] { --bg: #282629; }
+body[data-style="neo"][data-app="jellyfin"] { --bg: #242a38; }
+
+/* Cards and tiles extrude; borders would fight the shadows. */
+body[data-style="neo"] .card,
+body[data-style="neo"] .rbtn,
+body[data-style="neo"] .theme-card,
+body[data-style="neo"] .wall-card,
+body[data-style="neo"] .jf-poster,
+body[data-style="neo"] .result,
+body[data-style="neo"] .episode,
+body[data-style="neo"] .jf-list-item,
+body[data-style="neo"] .back-btn,
+body[data-style="neo"] .next-episode {
+  background: var(--bg);
+  border: 0;
+  box-shadow: var(--neo-raise-sm);
+}
+body[data-style="neo"] .results-sheet,
+body[data-style="neo"] .drawer {
+  border: 0;
+  box-shadow: var(--neo-raise-lg), 0 18px 40px rgba(0, 0, 0, 0.55);
+}
+body[data-style="neo"] .drawer {
+  background: var(--bg);
+  --surface: var(--bg);
+  --surface-2: color-mix(in srgb, var(--bg) 80%, black);
+  --line: transparent;
+}
+
+/* Pressed = sunk into the surface. */
+body[data-style="neo"] .rbtn:active,
+body[data-style="neo"] .theme-card:active,
+body[data-style="neo"] .result:active,
+body[data-style="neo"] .episode:active,
+body[data-style="neo"] .jf-list-item:active,
+body[data-style="neo"] .jf-tile:active .jf-poster,
+body[data-style="neo"] .next-episode:active,
+body[data-style="neo"] .back-btn:active {
+  transform: none;
+  background: var(--surface-2);
+  box-shadow: var(--neo-sink-sm);
+}
+
+/* Selected states read as sunk, with the brand hue as the tell. */
+body[data-style="neo"] .rbtn.active,
+body[data-style="neo"] .theme-card.on,
+body[data-style="neo"] .wall-card.on,
+body[data-style="neo"] .power-layout .rbtn.active {
+  box-shadow: var(--neo-sink-sm), 0 0 0 2px color-mix(in srgb, var(--focus) 60%, transparent);
+  background: var(--surface-2);
+  color: var(--focus);
+}
+body[data-style="neo"] .theme-card.on .theme-label,
+body[data-style="neo"] .wall-card.on .wall-title {
+  color: var(--focus);
+}
+
+/* Brand-filled controls keep their gradient; the extrusion comes along. */
+body[data-style="neo"] .rbtn.accent,
+body[data-style="neo"] .pill-btn.accent,
+body[data-style="neo"] .play-main,
+body[data-style="neo"] .segmented button.on,
+body[data-style="neo"] .search .send-btn {
+  box-shadow: var(--neo-raise-sm), 0 8px 22px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+body[data-style="neo"] .launch,
+body[data-style="neo"] .skip-ad,
+body[data-style="neo"] .chip.on {
+  box-shadow: var(--neo-raise-sm);
+}
+
+/* App switcher: a sunk tray; the active tab pops out in brand colour. */
+body[data-style="neo"] .switcher {
+  background: var(--surface-2);
+  border: 0;
+  box-shadow: var(--neo-sink-sm);
+}
+body[data-style="neo"] .switch-tab.on {
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 35%, transparent), var(--neo-raise-sm);
+}
+
+/* Inputs, pills, and small round buttons. */
+body[data-style="neo"] .search input,
+body[data-style="neo"] .titlebar-search input {
+  background: var(--surface-2);
+  border: 0;
+  box-shadow: var(--neo-sink-sm);
+}
+body[data-style="neo"] .search input:focus,
+body[data-style="neo"] .titlebar-search input:focus {
+  box-shadow: var(--neo-sink-sm), 0 0 0 2px var(--focus);
+}
+body[data-style="neo"] .chip,
+body[data-style="neo"] .pill-btn,
+body[data-style="neo"] .search button,
+body[data-style="neo"] .titlebar-btn,
+body[data-style="neo"] .jf-icon-btn,
+body[data-style="neo"] .theme-close {
+  background: var(--bg);
+  border: 0;
+  box-shadow: var(--neo-raise-sm);
+}
+body[data-style="neo"] .chip:active,
+body[data-style="neo"] .pill-btn:active,
+body[data-style="neo"] .search button:active,
+body[data-style="neo"] .titlebar-btn:active,
+body[data-style="neo"] .jf-icon-btn:active,
+body[data-style="neo"] .theme-close:active,
+body[data-style="neo"] .power-btn:active {
+  transform: none;
+  box-shadow: var(--neo-sink-sm);
+  background: var(--surface-2);
+}
+body[data-style="neo"] .titlebar-btn:active {
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: var(--neo-sink-sm);
+}
+body[data-style="neo"] .result-len {
+  background: var(--surface-2);
+  box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.45);
+}
+
+/* Swipe pad and d-pad: wells carved out of the surface. */
+body[data-style="neo"] .swipepad {
+  background: var(--surface-2);
+  border: 0;
+  box-shadow: var(--neo-sink);
+}
+body[data-style="neo"] .swipepad:active {
+  border: 0;
+}
+body[data-style="neo"] .dpad {
+  background: var(--surface-2);
+  border: 0;
+  box-shadow: var(--neo-sink), 0 1px 0 var(--neo-hi);
+}
+body[data-style="neo"] .pad-ok,
+body[data-style="neo"] .dpad-ok {
+  background:
+    linear-gradient(var(--bg), var(--bg)) padding-box,
+    linear-gradient(135deg, var(--accent), var(--accent-2)) border-box;
+  border: 2px solid transparent;
+  box-shadow: var(--neo-raise), 0 10px 24px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+body[data-style="neo"] .dpad-ok {
+  border: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  background: var(--bg);
+}
+body[data-style="neo"] .pad-ok.lit,
+body[data-style="neo"] .dpad-ok:active {
+  box-shadow: var(--neo-sink), 0 0 18px color-mix(in srgb, var(--accent) 45%, transparent);
+  border-color: var(--accent);
+}
+
+/* Progress lines sit in shallow grooves. */
+body[data-style="neo"] .progress,
+body[data-style="neo"] .titlebar-progress,
+body[data-style="neo"] .jf-progress.inline {
+  background: var(--surface-2);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+body[data-style="neo"] .titlebar-progress {
+  left: 12px;
+  right: 12px;
+  bottom: 8px;
+  height: 5px;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+/* Dock: the same surface, lifted by its own shadow. */
+body[data-style="neo"] .dock,
+body[data-style="neo"] .media-layout > .dock {
+  background: var(--bg);
+  border-top: 1px solid color-mix(in srgb, var(--text) 6%, transparent);
+  box-shadow: 0 -14px 30px rgba(0, 0, 0, 0.5), 0 -1px 0 var(--neo-hi);
+}
+body[data-style="neo"] .dock-btn {
+  background: var(--bg);
+  border: 0;
+  box-shadow: var(--neo-raise-sm);
+}
+body[data-style="neo"] .dock-btn:active {
+  background: var(--surface-2);
+  transform: none;
+  box-shadow: var(--neo-sink-sm);
+}
+body[data-style="neo"] .dock-btn.main,
+body[data-style="neo"] .dock-btn.main:active {
+  box-shadow: var(--neo-raise-sm), 0 10px 26px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+body[data-style="neo"] .power-go .dock-btn.main {
+  box-shadow: var(--neo-raise), 0 14px 30px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* Power tile in the top bar and the segmented toggle. */
+body[data-style="neo"] .power-btn {
+  background: var(--bg);
+  border: 0;
+  box-shadow: var(--neo-raise-sm);
+}
+body[data-style="neo"] .power-btn:active {
+  color: #ff5a5f;
+}
+body[data-style="neo"] .segmented {
+  background: var(--surface-2);
+  border: 0;
+  box-shadow: var(--neo-sink-sm);
+}
+
+/* Trackpad is a well with the accent glow inside it. */
+body[data-style="neo"] .trackpad {
+  border: 0;
+  box-shadow: var(--neo-sink);
+}
+body[data-style="neo"] .trackpad:active {
+  border: 0;
+  box-shadow: var(--neo-sink), 0 0 0 2px var(--accent);
+}
+
+/* Selection outlines on posters. */
+body[data-style="neo"] .jf-tile:active .jf-poster {
+  outline: 0;
+}
+body[data-style="neo"] .sheet-head {
+  background: var(--bg);
+}
+body[data-style="neo"] .theme-head {
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+}

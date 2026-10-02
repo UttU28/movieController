@@ -45,13 +45,20 @@ session = ChromeSession()
 MODE_STATE: dict = {"power": "off", "mode": "night", "lastApp": "youtube"}
 MODES = ("night", "live")
 APPS = ("youtube", "prime", "netflix", "jellyfin")
-# The theme and last app survive restarts; power always starts "off" (Chrome
-# opens on the Home screen).
+# The theme, last app, and last title survive restarts; power always starts
+# "off" (Chrome opens on the Home screen).
 LAST_APP_FILE = Path(__file__).resolve().parent / "last_app.txt"
+LAST_TITLE_FILE = LAST_APP_FILE.with_name("last_title.txt")
 try:
     _saved_app = LAST_APP_FILE.read_text(encoding="utf-8").strip()
     if _saved_app in APPS:
         MODE_STATE["lastApp"] = _saved_app
+except OSError:
+    pass
+try:
+    _saved_title = LAST_TITLE_FILE.read_text(encoding="utf-8").strip()
+    if _saved_title:
+        MODE_STATE["nowPlaying"] = _saved_title
 except OSError:
     pass
 THEME_FILE = Path(__file__).resolve().parent / "qr_theme.txt"
@@ -114,6 +121,12 @@ def _safe_connect():
             keeper.check()
             session.use_tab((qr_marker,), qr_url)
             session.bring_to_front()
+            # A window that just opened sometimes ignores the first fullscreen.
+            session.ensure_tv_mode()
+            if session.window_state() != "fullscreen":
+                time.sleep(0.4)
+                session.set_window_state("normal")
+                session.ensure_tv_mode()
     except Exception as e:
         print(f"Chrome launch failed: {e}")
     print(f"Phone remote: {qr_page.remote_url()}  (QR code at {qr_url})")
@@ -195,7 +208,7 @@ def get_state(app: str = "youtube"):
     player = (state or {}).get("player") or {}
     title = player.get("title")
     if isinstance(title, str) and title.strip() and app == MODE_STATE.get("lastApp"):
-        MODE_STATE["nowPlaying"] = title.strip()
+        _remember_title(title)
     return state
 
 
@@ -220,8 +233,20 @@ def _mode_state():
         cached = _last_state.get(MODE_STATE.get("lastApp") or "") or {}
         title = ((cached.get("player") or {}).get("title") or "")
         if isinstance(title, str) and title.strip():
-            MODE_STATE["nowPlaying"] = title.strip()
+            _remember_title(title)
     return {**MODE_STATE, "tvMode": tv, "wallpaper": {k: paper.get(k) for k in ("id", "title", "video", "poster")}}
+
+
+def _remember_title(title):
+    """Keep the last playing title next to last_app.txt so a restart still shows it."""
+    title = " ".join((title or "").split())
+    if not title or title == MODE_STATE.get("nowPlaying"):
+        return
+    MODE_STATE["nowPlaying"] = title
+    try:
+        LAST_TITLE_FILE.write_text(title, encoding="utf-8")
+    except OSError:
+        pass
 
 
 def _remember_app(name):
@@ -231,6 +256,7 @@ def _remember_app(name):
     MODE_STATE["nowPlaying"] = None
     try:
         LAST_APP_FILE.write_text(name, encoding="utf-8")
+        LAST_TITLE_FILE.write_text("", encoding="utf-8")
     except OSError:
         pass
 

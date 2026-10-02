@@ -1,0 +1,229 @@
+<title>Neo &amp; Clay Remote</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Outfit:wght@500;600;700;800&family=Baloo+2:wght@600;700;800&display=swap">
+<style>
+/* ---- studio: committed dark board ---- */
+:root{
+  --bg:#10131c; --fg:#e7eaf4; --muted:#949cb4; --surface:#171b28; --line:#252b3d;
+  color-scheme:dark;
+  /* NEUMORPHISM — dark surface, one raised, one sunk */
+  --neo-bg:#2b2f3a; --neo-fg:#d9dee9; --neo-dim:#8b93a6;
+  --neo-hi:#383e4c; --neo-sh:#1d2027;
+  --neo-accent:#ff4d63; --neo-accent-deep:#c22741;
+  /* CLAYMORPHISM — night clay: puffs of tinted dough on deep ink */
+  --clay-bg:#262b40; --clay-fg:#e0e4f6; --clay-dim:#8f98c2;
+  --clay-piece:#333955; --clay-hi:rgba(255,255,255,.08); --clay-lo:rgba(8,10,24,.5);
+  --clay-glow:rgba(6,8,20,.7);
+  --clay-accent:#ff6b8b; --clay-accent-deep:#a83a58;
+}
+body{background:var(--bg);color:var(--fg);font-family:"Sora",system-ui,sans-serif}
+
+.wrap{max-width:940px;margin:0 auto;padding-block:28px 56px;padding-inline:20px;display:flex;flex-direction:column;gap:26px}
+header h1{margin:0;font-size:26px;font-weight:800;letter-spacing:-.01em;text-wrap:balance}
+header p{margin:6px 0 0;font-size:14px;color:var(--muted);max-width:62ch;line-height:1.55}
+
+.boards{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:26px}
+.plinth{background:var(--surface);border:1px solid var(--line);border-radius:26px;padding:24px 22px 26px;display:flex;flex-direction:column;gap:18px;align-items:center}
+.plinth .tag{align-self:flex-start;display:flex;flex-direction:column;gap:3px}
+.tag b{font-size:16px;font-weight:800}
+.tag span{font-size:12.5px;color:var(--muted);line-height:1.5}
+
+/* ---- shared remote skeleton ---- */
+.phone{width:min(390px,100%);box-sizing:border-box;padding:18px 16px 18px;display:flex;flex-direction:column;gap:11px;border-radius:38px}
+.topline{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.brand{font-weight:800;font-size:17.5px;display:flex;align-items:center;gap:8px}
+.chip{flex:none;font-size:10px;font-weight:700;letter-spacing:.05em;padding:5px 10px;border-radius:999px;display:flex;align-items:center;gap:6px}
+.chip::before{content:"";width:6px;height:6px;border-radius:50%;background:#3ddc84}
+.grid5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px}
+.tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
+.tab{height:44px;border:0;padding:0;border-radius:14px;font-size:10.5px;letter-spacing:.02em;font-weight:700;cursor:pointer;font-family:inherit}
+.now{display:flex;align-items:center;gap:10px;position:relative;overflow:hidden;padding:12px 14px 16px}
+.now .meta{flex-grow:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.now .status{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;display:flex;justify-content:space-between;gap:8px}
+.now .status time{font-variant-numeric:tabular-nums;text-transform:none;letter-spacing:0;font-weight:600}
+.now h3{margin:0;font-size:14.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.now .chan{font-size:12px}
+.now .prog{position:absolute;left:14px;right:14px;bottom:9px;height:5px;border-radius:99px;overflow:hidden}
+.now .prog i{display:block;height:100%;width:32%;border-radius:99px}
+.srch{flex:none;width:46px;height:46px;border-radius:50%;border:0;font-size:16px;cursor:pointer;font-family:inherit}
+.pad{position:relative;height:232px;display:grid;place-items:center}
+.pad .arw{position:absolute;font-size:19px;user-select:none}
+.pad .arw.t{top:12px}.pad .arw.b{bottom:12px}.pad .arw.l{left:18px;font-size:23px}.pad .arw.r{right:18px;font-size:23px}
+.ok{width:76px;height:76px;border-radius:50%;border:0;font-size:16px;font-weight:800;letter-spacing:.06em;display:grid;place-items:center;cursor:pointer;font-family:inherit}
+.key{height:52px;border:0;padding:0;border-radius:15px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:9.5px;font-weight:700;letter-spacing:.02em;cursor:pointer;font-family:inherit}
+.key b{font-size:14.5px;line-height:1;font-weight:600}
+.dock{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:10px 12px;border-radius:22px;margin-top:1px}
+.dbtn{width:48px;height:48px;border-radius:50%;border:0;display:grid;place-items:center;font-size:16px;position:relative;cursor:pointer;font-family:inherit}
+.dbtn i{position:absolute;bottom:4px;left:0;right:0;font:800 8px sans-serif;font-style:normal;text-align:center;letter-spacing:.04em}
+.play{width:64px;height:64px;border-radius:50%;border:0;font-size:19px;color:#fff;cursor:pointer;font-family:inherit}
+button:focus-visible{outline:2px solid var(--neo-accent);outline-offset:3px}
+@media (prefers-reduced-motion:no-preference){button{transition:box-shadow .16s,transform .16s,background .16s,color .16s}}
+button:active{transform:translateY(1px)}
+
+/* ================= NEUMORPHISM — dark ================= */
+.neo{font-family:"Outfit",system-ui,sans-serif;background:var(--neo-bg);color:var(--neo-fg);
+  box-shadow:14px 14px 30px #0b0d11,-12px -12px 28px #3d4453}
+.neo .brand{color:var(--neo-fg)}
+.neo .brand span{color:var(--neo-accent)}
+.neo .chip{background:var(--neo-bg);color:var(--neo-dim);box-shadow:inset 3px 3px 6px var(--neo-sh),inset -3px -3px 6px var(--neo-hi)}
+.neo .tabs{border-radius:19px;padding:5px;box-shadow:inset 6px 6px 12px var(--neo-sh),inset -6px -6px 12px var(--neo-hi)}
+.neo .tab{background:var(--neo-bg);color:var(--neo-dim);box-shadow:4px 4px 9px var(--neo-sh),-4px -4px 9px var(--neo-hi)}
+.neo .tab:hover{color:var(--neo-fg)}
+.neo .tab.on{box-shadow:inset 4px 4px 8px var(--neo-sh),inset -4px -4px 8px var(--neo-hi);color:var(--neo-accent)}
+.neo .tab:active{box-shadow:inset 4px 4px 8px var(--neo-sh),inset -4px -4px 8px var(--neo-hi)}
+.neo .now{border-radius:20px;box-shadow:7px 7px 16px var(--neo-sh),-7px -7px 16px var(--neo-hi)}
+.neo .status{color:var(--neo-dim)}
+.neo .status time{color:var(--neo-fg)}
+.neo .chan{color:var(--neo-dim)}
+.neo .srch{background:var(--neo-bg);color:var(--neo-fg);box-shadow:inset 4px 4px 9px var(--neo-sh),inset -4px -4px 9px var(--neo-hi)}
+.neo .srch:active{box-shadow:3px 3px 7px var(--neo-sh),-3px -3px 7px var(--neo-hi)}
+.neo .prog{background:rgba(217,222,233,.1)}
+.neo .prog i{background:linear-gradient(90deg,var(--neo-accent-deep),var(--neo-accent));box-shadow:0 0 12px rgba(255,77,99,.55)}
+.neo .pad{border-radius:26px;box-shadow:inset 9px 9px 18px var(--neo-sh),inset -9px -9px 18px var(--neo-hi)}
+.neo .arw{color:var(--neo-dim)}
+.neo .ok{background:var(--neo-bg);color:var(--neo-accent);
+  box-shadow:9px 9px 18px var(--neo-sh),-9px -9px 18px var(--neo-hi),inset 0 0 0 2px rgba(255,77,99,.4)}
+.neo .ok:active{box-shadow:inset 5px 5px 11px var(--neo-sh),inset -5px -5px 11px var(--neo-hi),inset 0 0 0 2px rgba(255,77,99,.4)}
+.neo .key{background:var(--neo-bg);color:var(--neo-fg);box-shadow:5px 5px 11px var(--neo-sh),-5px -5px 11px var(--neo-hi)}
+.neo .key b{color:var(--neo-dim)}
+.neo .key:active{box-shadow:inset 4px 4px 9px var(--neo-sh),inset -4px -4px 9px var(--neo-hi)}
+.neo .dock{background:var(--neo-bg);box-shadow:7px 7px 16px var(--neo-sh),-7px -7px 16px var(--neo-hi)}
+.neo .dbtn{background:var(--neo-bg);color:var(--neo-fg);box-shadow:4px 4px 9px var(--neo-sh),-4px -4px 9px var(--neo-hi)}
+.neo .dbtn i{color:var(--neo-dim)}
+.neo .dbtn:active{box-shadow:inset 4px 4px 8px var(--neo-sh),inset -4px -4px 8px var(--neo-hi)}
+.neo .play{background:linear-gradient(145deg,#ff5d72,#cf2a47);text-shadow:0 1px 2px rgba(80,0,15,.5);
+  box-shadow:7px 7px 16px var(--neo-sh),-7px -7px 16px var(--neo-hi),0 12px 28px rgba(255,77,99,.32)}
+.neo .play:active{box-shadow:inset 5px 5px 10px rgba(80,8,25,.65),inset -4px -4px 8px rgba(255,160,175,.35)}
+
+/* ================= CLAYMORPHISM — dark ================= */
+.clay{font-family:"Baloo 2",system-ui,sans-serif;background:var(--clay-bg);color:var(--clay-fg);
+  box-shadow:0 40px 70px -24px rgba(0,0,0,.85),inset 0 2px 0 rgba(255,255,255,.06)}
+.clay .brand span{color:var(--clay-accent)}
+.clay .chip{background:var(--clay-piece);color:var(--clay-dim);
+  box-shadow:0 6px 12px -4px var(--clay-glow),inset 0 3px 4px var(--clay-hi),inset 0 -3px 5px var(--clay-lo)}
+.clay .puff{background:var(--clay-piece);border-radius:24px;
+  box-shadow:0 16px 26px -8px var(--clay-glow),0 4px 8px -2px rgba(0,0,0,.35),inset 0 6px 8px var(--clay-hi),inset 0 -7px 10px var(--clay-lo)}
+.clay .tabs{padding:6px;border-radius:26px}
+.clay .tab{background:transparent;color:var(--clay-dim);border-radius:18px}
+.clay .tab:hover{color:var(--clay-fg)}
+.clay .tab.on{background:var(--clay-accent);color:#fff;
+  box-shadow:0 10px 20px -6px rgba(255,107,139,.55),inset 0 -5px 8px var(--clay-accent-deep),inset 0 4px 6px rgba(255,255,255,.4)}
+.clay .tab:active{transform:translateY(2px)}
+.clay .now{padding:14px 16px 18px}
+.clay .status{color:var(--clay-dim)}
+.clay .status time{color:var(--clay-fg)}
+.clay .chan{color:var(--clay-dim)}
+.clay .srch{background:var(--clay-bg);color:var(--clay-fg);
+  box-shadow:0 10px 16px -6px var(--clay-glow),inset 0 -5px 8px var(--clay-lo),inset 0 5px 6px var(--clay-hi)}
+.clay .prog{background:rgba(10,12,26,.55);box-shadow:inset 0 2px 4px rgba(4,6,16,.6)}
+.clay .prog i{background:linear-gradient(90deg,var(--clay-accent-deep),var(--clay-accent))}
+.clay .pad{border-radius:32px}
+.clay .arw{color:var(--clay-dim)}
+.clay .ok{background:var(--clay-accent);color:#fff;text-shadow:0 1px 2px rgba(90,10,40,.4);
+  box-shadow:0 16px 28px -8px rgba(255,107,139,.5),inset 0 -8px 12px var(--clay-accent-deep),inset 0 7px 9px rgba(255,255,255,.4)}
+.clay .ok:active{transform:translateY(2px)}
+.clay .key{background:var(--clay-piece);color:var(--clay-fg);
+  box-shadow:0 12px 20px -8px var(--clay-glow),inset 0 5px 7px var(--clay-hi),inset 0 -6px 9px var(--clay-lo)}
+.clay .key b{color:var(--clay-dim)}
+.clay .key:active,.clay .dbtn:active,.clay .srch:active{transform:translateY(2px)}
+.clay .dock{background:var(--clay-piece);
+  box-shadow:0 16px 26px -8px var(--clay-glow),inset 0 6px 8px var(--clay-hi),inset 0 -7px 10px var(--clay-lo)}
+.clay .dbtn{background:var(--clay-bg);color:var(--clay-fg);
+  box-shadow:0 10px 16px -6px var(--clay-glow),inset 0 -5px 8px var(--clay-lo),inset 0 5px 6px var(--clay-hi)}
+.clay .dbtn i{color:var(--clay-dim)}
+.clay .play{background:linear-gradient(160deg,#ff85a0,var(--clay-accent));text-shadow:0 1px 2px rgba(90,10,40,.4);
+  box-shadow:0 20px 34px -10px rgba(255,107,139,.6),inset 0 -8px 12px var(--clay-accent-deep),inset 0 7px 9px rgba(255,255,255,.45)}
+.clay .play:active{transform:translateY(2px)}
+</style>
+
+<div class="wrap">
+<header>
+  <h1>The same remote, pressed soft</h1>
+  <p>The YouTube remote board restyled twice, in dark — same layout and content in both. Press any control: neumorphism sinks into its surface, claymorphism squashes its puff.</p>
+</header>
+
+<div class="boards">
+
+  <!-- ============ NEUMORPHISM ============ -->
+  <div class="plinth">
+    <div class="tag"><b>Neomorphism</b><span>One dark surface, two light sources. Controls extrude from the base and sink back in when pressed.</span></div>
+    <div class="phone neo">
+      <div class="topline">
+        <div class="brand"><span>&#9654;</span>YouTube Remote</div>
+        <span class="chip">Chrome · Linked</span>
+      </div>
+      <nav class="tabs" aria-label="Apps"><button class="tab">Laptop</button><button class="tab on">YouTube</button><button class="tab">Prime</button><button class="tab">Netflix</button><button class="tab">Jellyfin</button></nav>
+      <section class="now">
+        <div class="meta">
+          <div class="status"><span>Watching · Playing</span><time>0:41 / 2:09</time></div>
+          <h3>Kung Fu Panda | Official Trailer</h3>
+          <div class="chan">Universal Kids</div>
+        </div>
+        <button class="srch" aria-label="Search">&#9906;</button>
+        <div class="prog"><i></i></div>
+      </section>
+      <section class="pad">
+        <span class="arw t">&#8963;</span><span class="arw b">&#8964;</span><span class="arw l">&#8249;</span><span class="arw r">&#8250;</span>
+        <button class="ok">OK</button>
+      </section>
+      <div class="grid5">
+        <button class="key"><b>&#8592;</b>Back</button><button class="key"><b>&#8962;</b>Home</button><button class="key"><b>&#9678;</b>Focus</button><button class="key"><b>i</b>Mini</button><button class="key"><b>&#8635;</b>Reload</button>
+      </div>
+      <div class="grid5">
+        <button class="key"><b>&#128264;</b>YT −</button><button class="key"><b>&#128266;</b>YT +</button><button class="key"><b>CC</b>CC</button><button class="key"><b>&#9201;</b>1x</button><button class="key"><b>&#9974;</b>Full</button>
+      </div>
+      <div class="grid5">
+        <button class="key"><b>&#9198;</b>Prev</button><button class="key"><b>&#9635;</b>Theater</button><button class="key"><b>&#128263;</b>PC Mute</button><button class="key"><b>&#9707;</b>TV</button><button class="key"><b>&#9197;</b>Next</button>
+      </div>
+      <div class="dock">
+        <button class="dbtn" aria-label="PC volume down">&#128264;<i>PC</i></button>
+        <button class="dbtn" aria-label="Back 10 seconds">&#8634;<i>10</i></button>
+        <button class="play" aria-label="Pause">&#10074;&#10074;</button>
+        <button class="dbtn" aria-label="Forward 10 seconds">&#8635;<i>10</i></button>
+        <button class="dbtn" aria-label="PC volume up">&#128266;<i>PC</i></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ CLAYMORPHISM ============ -->
+  <div class="plinth">
+    <div class="tag"><b>Claymorphism</b><span>Night clay: chunky tinted puffs floating on deep ink, candy-red accents, shadow below and highlight within.</span></div>
+    <div class="phone clay">
+      <div class="topline">
+        <div class="brand"><span>&#9654;</span>YouTube Remote</div>
+        <span class="chip">Chrome · Linked</span>
+      </div>
+      <nav class="tabs puff" aria-label="Apps"><button class="tab">Laptop</button><button class="tab on">YouTube</button><button class="tab">Prime</button><button class="tab">Netflix</button><button class="tab">Jellyfin</button></nav>
+      <section class="now puff">
+        <div class="meta">
+          <div class="status"><span>Watching · Playing</span><time>0:41 / 2:09</time></div>
+          <h3>Kung Fu Panda | Official Trailer</h3>
+          <div class="chan">Universal Kids</div>
+        </div>
+        <button class="srch" aria-label="Search">&#9906;</button>
+        <div class="prog"><i></i></div>
+      </section>
+      <section class="pad puff">
+        <span class="arw t">&#8963;</span><span class="arw b">&#8964;</span><span class="arw l">&#8249;</span><span class="arw r">&#8250;</span>
+        <button class="ok">OK</button>
+      </section>
+      <div class="grid5">
+        <button class="key"><b>&#8592;</b>Back</button><button class="key"><b>&#8962;</b>Home</button><button class="key"><b>&#9678;</b>Focus</button><button class="key"><b>i</b>Mini</button><button class="key"><b>&#8635;</b>Reload</button>
+      </div>
+      <div class="grid5">
+        <button class="key"><b>&#128264;</b>YT −</button><button class="key"><b>&#128266;</b>YT +</button><button class="key"><b>CC</b>CC</button><button class="key"><b>&#9201;</b>1x</button><button class="key"><b>&#9974;</b>Full</button>
+      </div>
+      <div class="grid5">
+        <button class="key"><b>&#9198;</b>Prev</button><button class="key"><b>&#9635;</b>Theater</button><button class="key"><b>&#128263;</b>PC Mute</button><button class="key"><b>&#9707;</b>TV</button><button class="key"><b>&#9197;</b>Next</button>
+      </div>
+      <div class="dock">
+        <button class="dbtn" aria-label="PC volume down">&#128264;<i>PC</i></button>
+        <button class="dbtn" aria-label="Back 10 seconds">&#8634;<i>10</i></button>
+        <button class="play" aria-label="Pause">&#10074;&#10074;</button>
+        <button class="dbtn" aria-label="Forward 10 seconds">&#8635;<i>10</i></button>
+        <button class="dbtn" aria-label="PC volume up">&#128266;<i>PC</i></button>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>

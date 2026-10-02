@@ -9,6 +9,7 @@ import LaptopDrawer from "../components/LaptopDrawer";
 import PowerScreen from "../components/PowerScreen";
 import { buzz } from "../components/RemoteButton";
 import { getMode, setMode, setPower, showApp, toggleTv } from "../lib/api";
+import { useRemoteStyle } from "../lib/remoteStyle";
 import usePcVolumeKeys from "../lib/usePcVolumeKeys";
 import JellyfinPanel from "../panels/JellyfinPanel";
 import LaptopPanel, { TrackpadStatus } from "../panels/LaptopPanel";
@@ -18,6 +19,8 @@ import YouTubePanel from "../panels/YouTubePanel";
 
 const WEB_APPS = new Set(["youtube", "prime", "netflix", "jellyfin"]);
 const THEME_COLORS = { laptop: "#0d0e12", youtube: "#0f0f0f", prime: "#0b1219", netflix: "#141414", jellyfin: "#0e1116" };
+// Neomorphism lifts each surface off black so its soft shadows have room.
+const THEME_COLORS_NEO = { laptop: "#252836", youtube: "#232428", prime: "#1f2a38", netflix: "#282629", jellyfin: "#242a38" };
 const POLL_MS = 4000;
 // After picking an app here, ignore polls that still report the old one.
 const PICK_HOLD_MS = 6000;
@@ -38,12 +41,14 @@ export default function Home() {
   usePcVolumeKeys();
 
   // The full laptop page uses the laptop theme; otherwise the app's.
+  const [style] = useRemoteStyle();
   const themeApp = laptop === "full" ? "laptop" : app;
   useEffect(() => {
     if (!themeApp) return;
     document.body.dataset.app = themeApp;
-    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLORS[themeApp]);
-  }, [themeApp]);
+    const colors = style === "neo" ? THEME_COLORS_NEO : THEME_COLORS;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", colors[themeApp]);
+  }, [themeApp, style]);
 
   // Keep power / theme in step with the backend (another phone may change it).
   // Also follows the last app (another phone may have switched apps).
