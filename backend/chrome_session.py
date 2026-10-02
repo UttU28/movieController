@@ -62,6 +62,76 @@ def _host_matches(url, hosts):
     return any(h in (url or "") for h in hosts)
 
 
+def _mark_profile_clean():
+    """Tell Chrome the last session ended normally, so it doesn't offer to
+    restore pages the next time it opens. Only safe while Chrome is closed;
+    the file is locked (and rewritten) while it's running."""
+    path = Path(PROFILE_DIR) / "Default" / "Preferences"
+    if not path.is_file():
+        return
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        profile = data.setdefault("profile", {})
+        profile["exit_type"] = "Normal"
+        profile["exited_cleanly"] = True
+        path.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
+    except (OSError, json.JSONDecodeError, TypeError):
+        pass
+
+
+# Close the "Restore pages? Chrome didn't shut down correctly" bubble when it
+# is already on screen. The flag above only helps the next launch.
+_BUBBLE_SCRIPT = r"""
+Add-Type -AssemblyName UIAutomationClient
+$root = [System.Windows.Automation.AutomationElement]::RootElement
+$winCond = New-Object System.Windows.Automation.PropertyCondition(
+  [System.Windows.Automation.AutomationElement]::ClassNameProperty, 'Chrome_WidgetWin_1')
+$windows = $root.FindAll([System.Windows.Automation.TreeScope]::Children, $winCond)
+$walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+$closeCond = New-Object System.Windows.Automation.PropertyCondition(
+  [System.Windows.Automation.AutomationElement]::NameProperty, 'Close')
+$textCond = New-Object System.Windows.Automation.PropertyCondition(
+  [System.Windows.Automation.AutomationElement]::NameProperty, 'Chrome didn''t shut down correctly.')
+foreach ($w in $windows) {
+  $hit = $w.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $textCond)
+  if (-not $hit) { continue }
+  $node = $hit
+  $btn = $null
+  for ($i = 0; $i -lt 8 -and $node; $i++) {
+    $btn = $node.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $closeCond)
+    if ($btn) { break }
+    $node = $walker.GetParent($node)
+  }
+  if ($btn) {
+    $btn.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+  }
+}
+"""
+_bubble_lock = threading.Lock()
+
+
+def dismiss_restore_bubble():
+    """Click away Chrome's restore-pages bubble if it is showing."""
+    if os.name != "nt":
+        return
+    if not _bubble_lock.acquire(blocking=False):
+        return
+    try:
+        subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", _BUBBLE_SCRIPT],
+            timeout=12,
+            check=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    finally:
+        _bubble_lock.release()
+
+
 # How long a page may take before we give up on it. A site that hangs (a
 # slow Jellyfin server, a stuck Prime page) must never hold up the remote.
 SCRIPT_TIMEOUT = 8
@@ -99,9 +169,11 @@ class ChromeSession:
             "--disable-background-timer-throttling",
             "--no-first-run",
             "--no-default-browser-check",
+            "--hide-crash-restore-bubble",
             "--start-maximized",
             START_URL,
         ]
+        _mark_profile_clean()
         popen = dict(close_fds=True, stdin=subprocess.DEVNULL,
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         if os.name == "nt":

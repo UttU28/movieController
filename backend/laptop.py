@@ -4,9 +4,10 @@ Drives the real Windows desktop with pyautogui, like the original controller.
 Mouse movement arrives over a WebSocket for smooth trackpad control; everything
 else is a named action.
 
-On Windows the pointer is put away after a few seconds of stillness (and right
+On Windows the pointer is hidden after a few seconds of stillness (and right
 after a streaming-app click) so it does not sit on a video and keep it hovered.
-The next trackpad move brings it back where it was.
+It stays where it is; a blank spot covers it. The next trackpad move shows it
+again in the same place.
 """
 
 import atexit
@@ -89,8 +90,7 @@ APPS = {
 
 SCROLL_LIMIT = 2400
 MOVE_LIMIT = 400
-# How long the pointer may sit still before it is taken off whatever is
-# under it. Matches the Home screen, which hides its pointer after 3 s.
+# How long the pointer may sit still before it is hidden in place.
 CURSOR_IDLE_S = 3.0
 
 
@@ -211,8 +211,8 @@ if os.name == "nt":
     user32.TranslateMessage.argtypes = [ctypes.POINTER(_MSG)]
     user32.DispatchMessageW.argtypes = [ctypes.POINTER(_MSG)]
     user32.DispatchMessageW.restype = _LRESULT
-    user32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
-    user32.GetModuleHandleW.restype = wintypes.HINSTANCE
+    kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
+    kernel32.GetModuleHandleW.restype = wintypes.HINSTANCE
 
     _BLANK_CURSOR = None
 
@@ -228,7 +228,7 @@ if os.name == "nt":
         and_mask = (ctypes.c_ubyte * count)(*([0xFF] * count))
         xor_mask = (ctypes.c_ubyte * count)(*([0x00] * count))
         _BLANK_CURSOR = user32.CreateCursor(
-            user32.GetModuleHandleW(None), 0, 0, width, height, and_mask, xor_mask,
+            kernel32.GetModuleHandleW(None), 0, 0, width, height, and_mask, xor_mask,
         )
         # CreateCursor copies the masks, but keep them alive anyway.
         _blank_cursor.masks = (and_mask, xor_mask)
@@ -249,17 +249,6 @@ if os.name == "nt":
             return None
         return (int(pt.x), int(pt.y))
 
-    def _corner_for(x, y):
-        """A point in the bottom-right of whichever monitor holds (x, y)."""
-        info = _MONITORINFO()
-        info.cbSize = ctypes.sizeof(info)
-        mon = user32.MonitorFromPoint(wintypes.POINT(int(x), int(y)), 2)
-        if mon and user32.GetMonitorInfoW(mon, ctypes.byref(info)):
-            return (int(info.rcMonitor.right) - _PARK_SIZE // 2,
-                    int(info.rcMonitor.bottom) - _PARK_SIZE // 2)
-        return (user32.GetSystemMetrics(0) - _PARK_SIZE // 2,
-                user32.GetSystemMetrics(1) - _PARK_SIZE // 2)
-
 
 class LaptopControl:
     def __init__(self):
@@ -275,6 +264,8 @@ class LaptopControl:
         self._hide_window = False
         self._hwnd = None
         self._poke = threading.Event()
+        self._uncovered = threading.Event()
+        self._uncovered.set()
         self._tick_logged = False
         if os.name == "nt":
             threading.Thread(target=self._cursor_loop, name="cursor-idle", daemon=True).start()
@@ -291,55 +282,66 @@ class LaptopControl:
     # ------------------------------------------------------------------ mouse
 
     def _note_pointer(self):
-        """Caller holds self.lock. A trackpad action means the pointer is in use."""
+        """Caller holds self.lock. A trackpad action means the pointer is in use.
+        Returns True when the blank cover is up and must be dropped by the
+        window thread before this action runs."""
         if os.name != "nt":
-            return
+            return False
         now = time.monotonic()
         self._last_activity = now
         self._trackpad_at = now
-        if self._parked and self._saved:
-            # Jump back to where the pointer was. SetCursorPos lands on
-            # whatever window is there (Chrome), not on our park window.
-            user32.SetCursorPos(int(self._saved[0]), int(self._saved[1]))
-            self._parked = False
-            self._last_pos = self._saved
-            self._hide_window = True
-            self._poke.set()
+        if not (self._parked and self._saved):
+            return False
+        # The cover window belongs to the cursor thread. Hiding it from here
+        # would wait on that thread while we still hold the lock, and every
+        # later click, move and key would stall.
+        self._parked = False
+        self._last_pos = self._saved
+        self._hide_window = True
+        self._uncovered.clear()
+        self._poke.set()
+        return True
+
+    def _use_pointer(self, fn):
+        """Run a mouse action with the blank cover already gone."""
+        with self.lock:
+            waiting = self._note_pointer()
+        if waiting:
+            self._uncovered.wait(0.5)
+        with self.lock:
+            fn()
 
     def move(self, dx, dy):
         dx = max(-MOVE_LIMIT, min(MOVE_LIMIT, int(round(dx))))
         dy = max(-MOVE_LIMIT, min(MOVE_LIMIT, int(round(dy))))
         if dx or dy:
-            with self.lock:
-                self._note_pointer()
+            def go():
                 pyautogui.moveRel(dx, dy, _pause=False)
                 if os.name == "nt":
                     self._last_pos = _cursor_pos()
+            self._use_pointer(go)
 
     def scroll(self, amount):
         # Windows wheel units: 120 = one notch; small values scroll smoothly.
         amount = max(-SCROLL_LIMIT, min(SCROLL_LIMIT, int(round(amount))))
         if amount:
-            with self.lock:
-                self._note_pointer()
-                pyautogui.scroll(amount, _pause=False)
+            self._use_pointer(lambda: pyautogui.scroll(amount, _pause=False))
 
     def click(self, button="left", double=False):
         if button not in ("left", "right", "middle"):
             raise ValueError(f"Unknown mouse button '{button}'")
-        with self.lock:
-            self._note_pointer()
-            pyautogui.click(button=button, clicks=2 if double else 1, interval=0.08)
+        clicks = 2 if double else 1
+        self._use_pointer(lambda: pyautogui.click(button=button, clicks=clicks, interval=0.08))
 
     def set_drag(self, on):
         """Hold the left button down so trackpad moves drag things."""
-        with self.lock:
-            self._note_pointer()
+        def go():
             if on and not self.dragging:
                 pyautogui.mouseDown()
             elif not on and self.dragging:
                 pyautogui.mouseUp()
             self.dragging = bool(on)
+        self._use_pointer(go)
         return self.dragging
 
     def settle(self):
@@ -374,7 +376,7 @@ class LaptopControl:
 
     def _create_park_window(self):
         blank = _blank_cursor()
-        instance = user32.GetModuleHandleW(None)
+        instance = kernel32.GetModuleHandleW(None)
         cls = _WNDCLASSW()
         cls.lpfnWndProc = _WND_PROC_REF
         cls.hInstance = instance
@@ -437,23 +439,26 @@ class LaptopControl:
             parked = self._parked
         if hide and not parked and self._hwnd:
             user32.ShowWindow(self._hwnd, _SW_HIDE)
+        if hide:
+            self._uncovered.set()
 
     def _park(self, pos):
-        """Caller holds self.lock and is the window's thread."""
-        x, y = _corner_for(*pos)
+        """Hide the pointer where it is. Caller holds self.lock and is the
+        window's thread. A blank window covers the hotspot, so Windows draws
+        nothing and the video underneath stops seeing a hover."""
         self._saved = pos
+        x, y = int(pos[0]), int(pos[1])
         if self._hwnd:
             user32.SetWindowPos(
                 self._hwnd, _HWND_TOPMOST,
-                int(x - _PARK_SIZE // 2), int(y - _PARK_SIZE // 2),
+                x - _PARK_SIZE // 2, y - _PARK_SIZE // 2,
                 _PARK_SIZE, _PARK_SIZE,
                 _SWP_NOACTIVATE | _SWP_SHOWWINDOW,
             )
-        user32.SetCursorPos(int(x), int(y))
         if _BLANK_CURSOR:
             user32.SetCursor(_BLANK_CURSOR)
         self._parked = True
-        self._last_pos = _cursor_pos() or (int(x), int(y))
+        self._last_pos = pos
 
     # ------------------------------------------------------------------ keyboard
 

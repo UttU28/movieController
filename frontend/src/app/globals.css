@@ -2250,11 +2250,24 @@ html:has(.power-layout) body::-webkit-scrollbar {
     transform: none;
   }
 }
+.app-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 @media (prefers-reduced-motion: no-preference) {
+  .app-stage,
   .media-layout,
   .laptop,
   .power-layout {
     animation: remote-panel-in var(--panel-ms, 300ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  /* The stage is what slides between apps. The page inside it stays still. */
+  .app-stage .media-layout,
+  .app-stage .laptop {
+    animation: none;
   }
   .switch-tab:active {
     transform: scale(0.92);

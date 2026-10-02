@@ -159,7 +159,7 @@ export default function Home() {
   // A panel that follows the switcher slides in sideways; anything else
   // (power on, first load) keeps the gentle lift.
   const panelMotion = slide
-    ? { "--panel-x": `${slide > 0 ? 34 : -34}px`, "--panel-y": "0px", "--panel-ms": `${slideMs(slide)}ms` }
+    ? { "--panel-x": slide > 0 ? "100%" : "-100%", "--panel-y": "0px", "--panel-ms": `${slideMs(slide)}ms` }
     : undefined;
 
   return (
@@ -173,10 +173,12 @@ export default function Home() {
         </div>
       </header>
 
-      {app === "youtube" && <YouTubePanel />}
-      {app === "prime" && <PrimePanel />}
-      {app === "netflix" && <NetflixPanel />}
-      {app === "jellyfin" && <JellyfinPanel />}
+      <div key={app} className="app-stage">
+        {app === "youtube" && <YouTubePanel />}
+        {app === "prime" && <PrimePanel />}
+        {app === "netflix" && <NetflixPanel />}
+        {app === "jellyfin" && <JellyfinPanel />}
+      </div>
 
       {laptop === "drawer" && (
         <LaptopDrawer closeSignal={drawerClose} onClose={() => setLaptop(null)} onMore={() => setLaptop("full")} />

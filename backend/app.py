@@ -15,7 +15,7 @@ from selenium.common.exceptions import WebDriverException
 
 load_dotenv()
 
-from chrome_session import Busy, ChromeSession, PageUnresponsive
+from chrome_session import Busy, ChromeSession, PageUnresponsive, dismiss_restore_bubble
 from jellyfin_remote import JellyfinRemote
 from laptop import LaptopControl
 from netflix_remote import NetflixRemote
@@ -88,12 +88,24 @@ keeper = TabKeeper(session, [
 ])
 
 
+_stop_bubbles = threading.Event()
+
+
+def _watch_restore_bubble():
+    """The restore bubble can appear any time Chrome decides the last exit
+    was a crash. Look for it every so often and close it."""
+    while not _stop_bubbles.wait(20):
+        dismiss_restore_bubble()
+
+
 @asynccontextmanager
 async def lifespan(app):
     if LAUNCH_ON_START:
         threading.Thread(target=_safe_connect, daemon=True).start()
+    threading.Thread(target=_watch_restore_bubble, daemon=True).start()
     keeper.start()
     yield
+    _stop_bubbles.set()
     keeper.stop()
     with session.lock:
         session.teardown()
@@ -129,6 +141,8 @@ def _safe_connect():
                 session.ensure_tv_mode()
     except Exception as e:
         print(f"Chrome launch failed: {e}")
+    # Off the Chrome lock: close the "Restore pages?" bubble if a crash left it up.
+    dismiss_restore_bubble()
     print(f"Phone remote: {qr_page.remote_url()}  (QR code at {qr_url})")
 
 
