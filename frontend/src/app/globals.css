@@ -2276,10 +2276,14 @@ body[data-style="neo"] {
   --surface: var(--bg);
   --surface-2: color-mix(in srgb, var(--bg) 80%, black);
   --line: transparent;
-  --neo-hi: color-mix(in srgb, var(--bg) 84%, white);
-  --neo-lo: color-mix(in srgb, var(--bg) 50%, black);
+  /* Translucent shades: depth without a bright halo or a muddy edge. */
+  --neo-hi: rgba(255, 255, 255, 0.08);
+  --neo-lo: rgba(0, 0, 0, 0.45);
   --neo-raise: 8px 8px 18px var(--neo-lo), -8px -8px 18px var(--neo-hi);
   --neo-raise-sm: 4px 4px 10px var(--neo-lo), -4px -4px 10px var(--neo-hi);
+  /* For cards that sit in a clipped container (power screen): smaller bleed,
+     so the container's edge can't cut a visible line in the shadow. */
+  --neo-raise-xs: 2px 3px 7px var(--neo-lo), -2px -2px 7px var(--neo-hi);
   --neo-raise-lg: 12px 12px 30px rgba(0, 0, 0, 0.55), 8px 8px 18px var(--neo-lo), -8px -8px 18px var(--neo-hi);
   --neo-sink: inset 5px 5px 12px var(--neo-lo), inset -5px -5px 12px var(--neo-hi);
   --neo-sink-sm: inset 3px 3px 8px var(--neo-lo), inset -3px -3px 8px var(--neo-hi);
@@ -2331,18 +2335,31 @@ body[data-style="neo"] .back-btn:active {
   box-shadow: var(--neo-sink-sm);
 }
 
-/* Selected states read as sunk, with the brand hue as the tell. */
+/* Selected states sink into the surface and tint with the app's brand
+   colour — no outer ring, no blue. */
 body[data-style="neo"] .rbtn.active,
 body[data-style="neo"] .theme-card.on,
 body[data-style="neo"] .wall-card.on,
+body[data-style="neo"] .pill-btn.on,
 body[data-style="neo"] .power-layout .rbtn.active {
-  box-shadow: var(--neo-sink-sm), 0 0 0 2px color-mix(in srgb, var(--focus) 60%, transparent);
+  box-shadow: var(--neo-sink-sm);
   background: var(--surface-2);
-  color: var(--focus);
+  border: 0;
+  color: var(--accent);
 }
 body[data-style="neo"] .theme-card.on .theme-label,
 body[data-style="neo"] .wall-card.on .wall-title {
-  color: var(--focus);
+  color: var(--accent);
+}
+body[data-style="neo"] .search input:focus,
+body[data-style="neo"] .titlebar-search input:focus {
+  box-shadow: var(--neo-sink-sm), 0 0 0 2px color-mix(in srgb, var(--accent) 65%, transparent);
+}
+body[data-style="neo"] .selected-icon,
+body[data-style="neo"] .pad-arrow.lit,
+body[data-style="neo"] .dpad-arrow:active {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
 }
 
 /* Brand-filled controls keep their gradient; the extrusion comes along. */
@@ -2439,8 +2456,10 @@ body[data-style="neo"] .dpad-ok {
 }
 body[data-style="neo"] .pad-ok.lit,
 body[data-style="neo"] .dpad-ok:active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: var(--accent-ink);
+  border-color: transparent;
   box-shadow: var(--neo-sink), 0 0 18px color-mix(in srgb, var(--accent) 45%, transparent);
-  border-color: var(--accent);
 }
 
 /* Progress lines sit in shallow grooves. */
@@ -2478,10 +2497,22 @@ body[data-style="neo"] .dock-btn:active {
 }
 body[data-style="neo"] .dock-btn.main,
 body[data-style="neo"] .dock-btn.main:active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: var(--accent-ink);
   box-shadow: var(--neo-raise-sm), 0 10px 26px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 body[data-style="neo"] .power-go .dock-btn.main {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: var(--accent-ink);
   box-shadow: var(--neo-raise), 0 14px 30px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+/* The dock's glow gets clipped where the power screen's chrome box ends;
+   keep only the hairline there. */
+body[data-style="neo"] .power-chrome-bottom .dock {
+  box-shadow: 0 -1px 0 color-mix(in srgb, var(--text) 7%, transparent);
+}
+body[data-style="neo"] .power-layout .card {
+  box-shadow: var(--neo-raise-xs);
 }
 
 /* Power tile in the top bar and the segmented toggle. */
@@ -2518,4 +2549,60 @@ body[data-style="neo"] .sheet-head {
 }
 body[data-style="neo"] .theme-head {
   background: color-mix(in srgb, var(--bg) 92%, transparent);
+}
+
+/* ================================================================
+   Motion — panels glide in when the app (or the remote's power)
+   changes, and surfaces ease when the style is switched.
+   ================================================================ */
+@keyframes remote-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .media-layout,
+  .laptop,
+  .power-layout {
+    animation: remote-panel-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .switch-tab:active {
+    transform: scale(0.92);
+  }
+  /* Switching Default <-> Neomorphism cross-fades the surfaces instead of
+     snapping every edge at once. */
+  .card,
+  .rbtn,
+  .chip,
+  .pill-btn,
+  .switcher,
+  .swipepad,
+  .dpad,
+  .pad-ok,
+  .dpad-ok,
+  .dock,
+  .dock-btn,
+  .theme-card,
+  .wall-card,
+  .search input,
+  .titlebar-search input,
+  .segmented,
+  .power-btn,
+  .titlebar-btn,
+  .search button,
+  .jf-icon-btn,
+  .theme-close,
+  .back-btn,
+  .result,
+  .episode,
+  .jf-list-item,
+  .jf-poster {
+    transition: box-shadow 0.35s ease, background-color 0.3s ease, color 0.3s ease,
+      border-color 0.3s ease, transform 0.1s ease;
+  }
 }

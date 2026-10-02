@@ -5,7 +5,7 @@ import { useCallback, useEffect, useSyncExternalStore } from "react";
 // Which look this phone wears: "classic" (flat tiles) or "neo" (neumorphism).
 // Per-phone, kept in localStorage; the backend doesn't care how a phone looks.
 // null means the phone hasn't chosen yet — the power screen asks.
-const KEY = "remote-st…tyle";
+const KEY = "remote-style";
 
 let current; // undefined = un-read, null = no choice yet, else "classic" | "neo"
 const subs = new Set();
