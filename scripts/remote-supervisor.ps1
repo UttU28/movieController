@@ -339,6 +339,10 @@ while ($true) {
     $argList = @($next, 'dev', '-p', '9283', '-H', '0.0.0.0')
   }
 
+  # A pid file left by a window that was closed (an update) would make the
+  # supervisor health-check this server while it is still building. Without
+  # one it waits until the server has started.
+  Remove-Item (Join-Path $LogDir "$Role.pid") -ErrorAction SilentlyContinue
   Clear-OurPort $port
 
   # Build the phone page (only when its code is newer than the last build),
