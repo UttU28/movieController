@@ -8,6 +8,7 @@ import {
   faBookOpen,
   faClosedCaptioning,
   faExpand,
+  faForwardFast,
   faForwardStep,
   faHouse,
   faListOl,
@@ -19,6 +20,7 @@ import {
   faVolumeLow,
   faVolumeXmark,
 } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import ChromeStatus, { isReady } from "../components/ChromeStatus";
 import JellyfinDetail from "../components/JellyfinDetail";
 import JellyfinLibrary from "../components/JellyfinLibrary";
@@ -26,6 +28,7 @@ import { fmt } from "../components/NowShowing";
 import PlayerDock from "../components/PlayerDock";
 import RemoteButton, { buzz } from "../components/RemoteButton";
 import Sheet, { SheetToggle } from "../components/Sheet";
+import SkipNotice from "../components/SkipNotice";
 import SwipePad from "../components/SwipePad";
 import TitleBar from "../components/TitleBar";
 import { sendAction } from "../lib/api";
@@ -158,8 +161,8 @@ export default function JellyfinPanel() {
         {(player?.skipLabel || hasTracks || detail) && view === "remote" && (
           <div className="titlebar-actions">
             {player?.skipLabel && (
-              <button type="button" className="pill-btn accent" onClick={() => { buzz(); action("skip"); }}>
-                {player.skipLabel}
+              <button type="button" className="pill-btn skip" onClick={() => { buzz(); action("skip"); }}>
+                <FontAwesomeIcon icon={faForwardFast} /> {player.skipLabel}
               </button>
             )}
             {detail && (
@@ -203,6 +206,7 @@ export default function JellyfinPanel() {
   if (view === "library") {
     return (
       <div className="media-layout">
+        <SkipNotice skips={state?.skips} />
         {titleBar}
         {error && <div className="error">{error}</div>}
         <div className="library-scroll">
@@ -215,6 +219,7 @@ export default function JellyfinPanel() {
 
   return (
     <div className="media-layout">
+      <SkipNotice skips={state?.skips} />
       {titleBar}
 
       {error && <div className="error">{error}</div>}

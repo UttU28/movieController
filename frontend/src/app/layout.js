@@ -6,7 +6,7 @@ config.autoAddCss = false;
 
 export const metadata = {
   title: "Remote",
-  description: "Phone remote for the laptop, YouTube and Prime Video",
+  description: "Phone remote for the laptop, YouTube, Prime Video, Netflix, Viki and Jellyfin",
 };
 
 export const viewport = {

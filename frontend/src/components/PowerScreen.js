@@ -65,7 +65,7 @@ function useWallpapers() {
 
 // What the phone shows while the remote is powered off: a short status,
 // the last title and app, and Turn on. The Home screen editor stays behind Theme.
-const APP_NAMES = { youtube: "YouTube", prime: "Prime Video", netflix: "Netflix", jellyfin: "Jellyfin" };
+const APP_NAMES = { youtube: "YouTube", prime: "Prime Video", netflix: "Netflix", viki: "Viki", jellyfin: "Jellyfin" };
 
 function ToolButton({ icon, label, active = false, disabled = false, spin = false, pressed, expanded, onPress }) {
   return (

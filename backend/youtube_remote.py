@@ -22,8 +22,6 @@ YOUTUBE_URL = "https://www.youtube.com/"
 
 SEEK_SECONDS = 10
 VOLUME_STEP = 10
-# How long to wait before clicking Skip again if the button is still up.
-SKIP_AD_RETRY_SECONDS = 1.5
 # YouTube's ArrowUp/Down shortcut changes volume by 5%.
 VOLUME_KEY_PRESSES = VOLUME_STEP // 5
 
@@ -39,10 +37,6 @@ class YouTubeRemote(ChromeApp):
     NAME = "youtube"
     HOSTS = ("youtube.com",)
     HOME_URL = YOUTUBE_URL
-
-    def __init__(self, session):
-        super().__init__(session)
-        self._last_ad_skip = 0.0
 
     # ------------------------------------------------------------------ helpers
 
@@ -82,23 +76,9 @@ class YouTubeRemote(ChromeApp):
             time.sleep(0.1)
         return False
 
-    def _maybe_skip_ad(self, state):
-        """Press Skip as soon as YouTube shows the button."""
-        player = (state or {}).get("player") or {}
-        if not player.get("canSkipAd"):
-            return state
-        now = time.time()
-        if now - self._last_ad_skip < SKIP_AD_RETRY_SECONDS:
-            return state
-        self._last_ad_skip = now
-        try:
-            self._do_skipAd()
-            return self._js("state")
-        except WebDriverException:
-            return state
-
     def _page_state(self):
-        return self._maybe_skip_ad(self._js("state"))
+        # Skip Ad is pressed by auto_skip as soon as it shows up.
+        return self._js("state")
 
     def _focus_player(self):
         """Give the player keyboard focus so YouTube's own shortcuts

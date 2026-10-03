@@ -1,5 +1,5 @@
 """Keeps the remote's Chrome tabs in a fixed order: YouTube, Prime Video,
-Netflix, Jellyfin, then the QR-code page, reopening any that get closed.
+Netflix, Jellyfin, Viki, then the QR-code page, reopening any that get closed.
 
 Chrome can't move a tab to a given position (new tabs always open at the
 end), so when a tab is missing, it and every managed tab after it are

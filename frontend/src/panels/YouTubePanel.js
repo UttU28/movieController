@@ -6,6 +6,7 @@ import {
   faBackwardStep,
   faClosedCaptioning,
   faExpand,
+  faForwardFast,
   faForwardStep,
   faGauge,
   faHouse,
@@ -18,11 +19,13 @@ import {
   faVolumeXmark,
   faWindowMaximize,
 } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import ChromeStatus, { isReady } from "../components/ChromeStatus";
 import { ResultList, fmt } from "../components/NowShowing";
 import PlayerDock from "../components/PlayerDock";
 import RemoteButton from "../components/RemoteButton";
 import Sheet, { SheetToggle } from "../components/Sheet";
+import SkipNotice from "../components/SkipNotice";
 import SwipePad from "../components/SwipePad";
 import TitleBar from "../components/TitleBar";
 import useKeyboardRemote from "../lib/useKeyboardRemote";
@@ -107,6 +110,7 @@ export default function YouTubePanel() {
 
   return (
     <div className="media-layout">
+      <SkipNotice skips={state?.skips} />
       {ready ? (
         <div className="titlebar-wrap">
           <TitleBar
@@ -120,8 +124,8 @@ export default function YouTubePanel() {
             {(player?.canSkipAd || results.length > 0 || upNext.length > 0) && (
               <div className="titlebar-actions">
                 {player?.canSkipAd && (
-                  <button type="button" className="pill-btn accent" onClick={() => action("skipAd")}>
-                    Skip ad
+                  <button type="button" className="pill-btn skip" onClick={() => action("skipAd")}>
+                    <FontAwesomeIcon icon={faForwardFast} /> Skip ad
                   </button>
                 )}
                 {results.length > 0 && (

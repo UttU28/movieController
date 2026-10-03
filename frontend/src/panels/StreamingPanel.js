@@ -23,6 +23,7 @@ import { fmt } from "../components/NowShowing";
 import PlayerDock from "../components/PlayerDock";
 import RemoteButton, { buzz } from "../components/RemoteButton";
 import Sheet, { SheetToggle } from "../components/Sheet";
+import SkipNotice from "../components/SkipNotice";
 import SwipePad from "../components/SwipePad";
 import TitleBar from "../components/TitleBar";
 import TitleDetail from "../components/TitleDetail";
@@ -50,15 +51,17 @@ const KEYS = {
 const KIND_LABELS = { title: "Title", episode: "Episode", tab: "Tab", button: "Button", profile: "Profile" };
 
 // What the title bar says: what's playing, the title page, or what's highlighted.
-function describe(state, pageLabels, appName) {
+function describe(state, pageLabels, appName, notices) {
   const page = pageLabels[state.pageType] || appName;
   const { player, detail, focus } = state;
+  const notice = notices?.[state.pageType];
+  if (notice) return { eyebrow: page, title: notice.title, sub: notice.sub };
   if (player) {
     const status = player.isAd ? "Ad" : player.paused ? "Paused" : "Playing";
     return {
       eyebrow: `${page} · ${status}`,
       title: player.title,
-      sub: player.subtitle,
+      sub: (player.isAd && player.adLabel) || player.subtitle,
       time: player.duration ? `${fmt(player.currentTime)} / ${fmt(player.duration)}` : null,
       progress: player.duration ? Math.min(100, (player.currentTime / player.duration) * 100) : null,
     };
@@ -70,9 +73,10 @@ function describe(state, pageLabels, appName) {
   return { eyebrow: page, title: "Swipe the pad to start moving", sub: "" };
 }
 
-// Remote for a streaming site (Prime Video, Netflix). `sections` are the two
-// shortcut buttons in the navigation row, e.g. Movies and TV shows.
-export default function StreamingPanel({ app, appName, audioLabel, pageLabels, sections }) {
+// Remote for a streaming site (Prime Video, Netflix, Viki). `sections` are the
+// two shortcut buttons in the navigation row, e.g. Movies and TV shows.
+// `notices` replace the title bar on pages that need a word of explanation.
+export default function StreamingPanel({ app, appName, audioLabel, pageLabels, sections, notices }) {
   const { state, connected, error, action, search, show } = useRemote(app);
   const pc = useRemote("laptop", { poll: false });
   const [detailOpen, setDetailOpen] = useState(false);
@@ -82,6 +86,8 @@ export default function StreamingPanel({ app, appName, audioLabel, pageLabels, s
   const player = state?.player;
   const detail = !player ? state?.detail : null;
   const profiles = state?.profiles || [];
+  // Set when the site has several English subtitle tracks, or none.
+  const subtitleOptions = player?.subtitleOptions || [];
 
   // Opening a title shows its episodes; leaving it closes the sheet.
   const detailKey = detail ? detail.title : null;
@@ -93,9 +99,10 @@ export default function StreamingPanel({ app, appName, audioLabel, pageLabels, s
 
   return (
     <div className="media-layout">
+      <SkipNotice skips={state?.skips} />
       {ready ? (
         <div className="titlebar-wrap">
-          <TitleBar {...describe(state, pageLabels, appName)} placeholder={`Search ${appName}`} onSearch={search}>
+          <TitleBar {...describe(state, pageLabels, appName, notices)} placeholder={`Search ${appName}`} onSearch={search}>
             {(player?.skipLabel || player?.hasNext || detail || profiles.length > 0) && (
               <div className="titlebar-actions">
                 {profiles.map((name, i) => (
@@ -104,8 +111,8 @@ export default function StreamingPanel({ app, appName, audioLabel, pageLabels, s
                   </button>
                 ))}
                 {player?.skipLabel && (
-                  <button type="button" className="pill-btn accent" onClick={() => { buzz(); action("skip"); }}>
-                    {player.skipLabel}
+                  <button type="button" className="pill-btn skip" onClick={() => { buzz(); action("skip"); }}>
+                    <FontAwesomeIcon icon={faForwardFast} /> {player.skipLabel}
                   </button>
                 )}
                 {player?.hasNext && (
@@ -124,6 +131,19 @@ export default function StreamingPanel({ app, appName, audioLabel, pageLabels, s
               </div>
             )}
           </TitleBar>
+          <Sheet
+            open={subtitleOptions.length > 0}
+            title="Subtitles · pick one"
+            onClose={() => action("closeSubtitles")}
+          >
+            <div className="chips subtitle-choices">
+              {subtitleOptions.map((o) => (
+                <button key={o.index} type="button" className="chip" onClick={() => { buzz(); action("subtitles", { value: o.index }); }}>
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </Sheet>
           <Sheet open={detailOpen && !!detail} title={episodes ? "Seasons & episodes · tap to play" : "Play"} onClose={() => setDetailOpen(false)}>
             {detail && <TitleDetail detail={detail} action={action} onPlayed={() => setDetailOpen(false)} />}
           </Sheet>

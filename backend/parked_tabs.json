@@ -1,0 +1,30 @@
+{
+ "netflix": {
+  "url": "https://www.netflix.com/login?nextpage=https%3A%2F%2Fwww.netflix.com%2Fbrowse&serverState=BgjUv%2BvcAxKpAoK8GyX%2F%2BMuTHRplUREH7vx6qosaIbV6R2oHRCkTdoC0z6CWegCWRoPVeWEKPAzO1HeSMUQbzF4Z6Wqz3Z0n3pX0i%2Bj23OP0zqRqF1OMtxB%2BGjFYc1udLpUGynZY0Jamw29MqRlC9pSyFbnhp%2Bo4nAtg8PtYmeKq8LOQIqEfjs%2Fs6N4eJtFD83gx0MgCHV89lXifCZ9pym0yGzUM3Kpi8T6TPPVhIcLI3%2F8q9C70baBOZXgSS5zgNKcIJiL2JDcB1GjLmIoRilXG4qdTNWQxu4S9gKZQZGvj%2BU1X4b1Za2MOez%2FEX33IqHSLiew7eZSU1fUPJuCeDgU1sEqZJz126UHssW3tqtM3FvnbDgITf0m1tXVi1xL1NMjndviugKshRJsLS%2FoHefoDOBgGIg4KDLk%2BfvgUZn422Xl21A%3D%3D",
+  "t": 0,
+  "playing": false,
+  "tabId": "63D6F5843146B36167014B07D001E9B2",
+  "at": 1791061019.894521
+ },
+ "prime": {
+  "url": "https://www.primevideo.com/",
+  "t": 0,
+  "playing": false,
+  "tabId": "51B27E293ED25D4DFE17B8B2FBC4CB84",
+  "at": 1791061019.881011
+ },
+ "jellyfin": {
+  "url": "https://streaming.thatinsaneguy.com/web/#/login?serverid=28a32f80a5634a6383447efd5d5ef414&url=%2Fhome",
+  "t": 0,
+  "playing": false,
+  "tabId": "8A0E7E3F3B6F34D8FE8AFBEAAC630D0C",
+  "at": 1791061019.910259
+ },
+ "youtube": {
+  "url": "https://www.youtube.com/",
+  "t": 0,
+  "playing": false,
+  "tabId": "6F0512743CCA0B190EFF2869FBEB016B",
+  "at": 1791061019.870059
+ }
+}

@@ -48,8 +48,9 @@
     background: #000;
     font-family: var(--font);
   }
-  /* Hide the mouse pointer once it stops moving. */
-  body.idle, body.idle * { cursor: none !important; }
+  /* This page is watched from the sofa: the real pointer is never useful
+     here. The ring script below stands in for it while the mouse moves. */
+  body { cursor: none; }
 
   .wall {
     position: fixed;
@@ -142,15 +143,26 @@
   tick();
   setInterval(tick, 10000);
 
-  // ---- Pointer: hide after 3 s without movement.
-  let idleTimer;
-  function wake() {
-    document.body.classList.remove("idle");
-    clearTimeout(idleTimer);
-    idleTimer = setTimeout(() => document.body.classList.add("idle"), 3000);
+  // ---- Pointer: the page's cursor is hidden (TV screen), so a ring marks
+  // where the mouse is while it moves and fades out 5 s after it stops.
+  // Same look as warden.js in the app tabs.
+  const ring = document.createElement("div");
+  ring.setAttribute("aria-hidden", "true");
+  ring.style.cssText =
+    "position:fixed;z-index:2147483647;width:36px;height:36px;margin:-18px 0 0 -18px;" +
+    "border:3px solid #fff;border-radius:50%;pointer-events:none;left:0;top:0;opacity:0;" +
+    "box-shadow:0 0 0 2px rgba(0,0,0,.6),0 0 16px rgba(0,0,0,.5);transition:opacity .3s";
+  document.body.appendChild(ring);
+  let ringTimer;
+  function showRing(e) {
+    ring.style.left = e.clientX + "px";
+    ring.style.top = e.clientY + "px";
+    ring.style.opacity = "1";
+    clearTimeout(ringTimer);
+    ringTimer = setTimeout(() => { ring.style.opacity = "0"; }, 5000);
   }
-  addEventListener("mousemove", wake);
-  wake();
+  addEventListener("pointermove", showRing, { passive: true });
+  addEventListener("pointerdown", showRing, { passive: true });
 
   // ---- Wallpaper: only plays while this tab is the one showing. When it's
   // hidden the video is unloaded entirely, so it holds no decoder or memory.

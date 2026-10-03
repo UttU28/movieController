@@ -54,6 +54,18 @@ body[data-app="netflix"] {
   --focus: #e50914;
 }
 
+body[data-app="viki"] {
+  --bg: #0c1018;
+  --surface: #151b26;
+  --surface-2: #1f2735;
+  --line: #2a3446;
+  --muted: #8f9cb3;
+  --accent: #2b8cff;
+  --focus: #2b8cff;
+  --dpad-hi: #1e2634;
+  --dpad-lo: #10141d;
+}
+
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
@@ -483,6 +495,9 @@ button {
 }
 .switch-pill[data-app="netflix"] {
   background: linear-gradient(135deg, #f0212c, #9c0710);
+}
+.switch-pill[data-app="viki"] {
+  background: linear-gradient(135deg, #3d9bff, #4b3fe0);
 }
 
 .section-title {
@@ -1523,6 +1538,9 @@ body[data-app="prime"] {
 body[data-app="netflix"] {
   --accent-2: #9c0710;
 }
+body[data-app="viki"] {
+  --accent-2: #4b3fe0;
+}
 body[data-app="jellyfin"] {
   --accent-2: #aa5cc3;
 }
@@ -2345,4 +2363,59 @@ html:has(.power-layout) body::-webkit-scrollbar {
   margin-left: auto;
   font-size: 0.7rem;
   opacity: 0.7;
+}
+
+/* Subtitle tracks to pick from (Viki, when English isn't a single track). */
+.subtitle-choices {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+
+/* Skip buttons get their own colour, so they stand out next to Next episode. */
+.pill-btn.skip,
+.pill-btn.skip:active {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #1a1200;
+  background: linear-gradient(135deg, #ffd23f, #ff9f1c);
+  border-color: transparent;
+  box-shadow: 0 4px 14px rgba(255, 170, 30, 0.35);
+}
+
+/* "Skipped the intro": a notice that drops in under the app switcher. */
+.skip-notice {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 84px);
+  left: 50%;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #1a1200;
+  background: linear-gradient(135deg, #ffd23f, #ff9f1c);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  transform: translateX(-50%);
+  animation: skip-notice-in 0.25s ease-out;
+  pointer-events: none;
+}
+.skip-notice.failed {
+  color: #fff;
+  background: linear-gradient(135deg, #ff5a5f, #c81d25);
+}
+@keyframes skip-notice-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -12px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skip-notice {
+    animation: none;
+  }
 }

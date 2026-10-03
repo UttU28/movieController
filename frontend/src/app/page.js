@@ -14,10 +14,11 @@ import JellyfinPanel from "../panels/JellyfinPanel";
 import LaptopPanel, { TrackpadStatus } from "../panels/LaptopPanel";
 import NetflixPanel from "../panels/NetflixPanel";
 import PrimePanel from "../panels/PrimePanel";
+import VikiPanel from "../panels/VikiPanel";
 import YouTubePanel from "../panels/YouTubePanel";
 
-const WEB_APPS = new Set(["youtube", "prime", "netflix", "jellyfin"]);
-const THEME_COLORS = { laptop: "#0d0e12", youtube: "#0f0f0f", prime: "#0b1219", netflix: "#141414", jellyfin: "#0e1116" };
+const WEB_APPS = new Set(["youtube", "prime", "netflix", "viki", "jellyfin"]);
+const THEME_COLORS = { laptop: "#0d0e12", youtube: "#0f0f0f", prime: "#0b1219", netflix: "#141414", viki: "#0c1018", jellyfin: "#0e1116" };
 const POLL_MS = 4000;
 // After picking an app here, ignore polls that still report the old one.
 const PICK_HOLD_MS = 6000;
@@ -177,6 +178,7 @@ export default function Home() {
         {app === "youtube" && <YouTubePanel />}
         {app === "prime" && <PrimePanel />}
         {app === "netflix" && <NetflixPanel />}
+        {app === "viki" && <VikiPanel />}
         {app === "jellyfin" && <JellyfinPanel />}
       </div>
 

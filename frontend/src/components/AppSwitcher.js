@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faAmazon, faYoutube } from "@fortawesome/free-brands-svg-icons";
-import { faClapperboard, faN } from "@fortawesome/free-solid-svg-icons";
+import { faClapperboard, faN, faV } from "@fortawesome/free-solid-svg-icons";
 import { buzz } from "./RemoteButton";
 
 export const APPS = [
   { id: "youtube", label: "YouTube", icon: faYoutube },
   { id: "prime", label: "Prime", icon: faAmazon },
   { id: "netflix", label: "Netflix", icon: faN },
+  { id: "viki", label: "Viki", icon: faV },
   { id: "jellyfin", label: "Jellyfin", icon: faClapperboard },
 ];
 

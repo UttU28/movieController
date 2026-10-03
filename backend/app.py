@@ -15,7 +15,9 @@ from selenium.common.exceptions import WebDriverException
 
 load_dotenv()
 
+from auto_skip import AutoSkip
 from chrome_session import Busy, ChromeSession, PageUnresponsive, dismiss_restore_bubble
+from cursor_warden import CursorWarden
 from jellyfin_remote import JellyfinRemote
 from laptop import LaptopControl
 from netflix_remote import NetflixRemote
@@ -24,12 +26,14 @@ import wallpapers
 from prime_remote import PrimeRemote
 from tab_keeper import TabKeeper
 from tab_park import TabPark
+from viki_remote import VikiRemote
 from youtube_remote import YouTubeRemote
 
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "9282"))
 RELOAD = os.getenv("RELOAD", "false").lower() in ("1", "true", "yes")
 LAUNCH_ON_START = os.getenv("LAUNCH_ON_START", "true").lower() in ("1", "true", "yes")
+AUTO_SKIP = os.getenv("AUTO_SKIP", "true").lower() in ("1", "true", "yes")
 CORS_ORIGINS = [
     origin.strip()
     for origin in os.getenv("CORS_ORIGINS", "*").split(",")
@@ -46,7 +50,7 @@ session = ChromeSession()
 #        turning the remote on opens this app on the phone and its tab in Chrome.
 MODE_STATE: dict = {"power": "off", "mode": "night", "lastApp": "youtube"}
 MODES = ("night", "live")
-APPS = ("youtube", "prime", "netflix", "jellyfin")
+APPS = ("youtube", "prime", "netflix", "viki", "jellyfin")
 # The theme, last app, and last title survive restarts; power always starts
 # "off" (Chrome opens on the Home screen).
 LAST_APP_FILE = Path(__file__).resolve().parent / "last_app.txt"
@@ -76,6 +80,7 @@ web_apps = {
     "youtube": YouTubeRemote(session),
     "prime": PrimeRemote(session),
     "netflix": NetflixRemote(session),
+    "viki": VikiRemote(session),
     "jellyfin": JellyfinRemote(session),
 }
 laptop = LaptopControl()
@@ -86,11 +91,17 @@ keeper = TabKeeper(session, [
     ("prime", web_apps["prime"].HOME_URL, "primevideo.com"),
     ("netflix", web_apps["netflix"].HOME_URL, "netflix.com"),
     ("jellyfin", web_apps["jellyfin"].HOME_URL, web_apps["jellyfin"].HOSTS[0]),
+    ("viki", web_apps["viki"].HOME_URL, "viki.com"),
     ("qr", f"http://127.0.0.1:{PORT}/qr", f":{PORT}/qr"),
 ])
 # Powers tabs down to about:blank when they're not in use (power off, or
 # another app is showing), remembering where to put them back.
 park = TabPark(session, keeper)
+# Draws a pointer ring in the app tabs for when the page (or fullscreen)
+# hides the real cursor.
+warden = CursorWarden(session, keeper)
+# Clicks Skip (ads, intros, recaps...) as soon as a site offers it.
+skipper = AutoSkip(session, keeper, enabled=AUTO_SKIP)
 
 
 _stop_bubbles = threading.Event()
@@ -109,9 +120,13 @@ async def lifespan(app):
         threading.Thread(target=_safe_connect, daemon=True).start()
     threading.Thread(target=_watch_restore_bubble, daemon=True).start()
     keeper.start()
+    warden.start()
+    skipper.start()
     yield
     _stop_bubbles.set()
     keeper.stop()
+    warden.stop()
+    skipper.stop()
     with session.lock:
         session.teardown()
 
@@ -207,23 +222,29 @@ _state_locks = {}
 _last_state = {}
 
 
+def _with_skips(state, app):
+    """Add the app's recent auto-skip events, for the phone's notice."""
+    return {**state, "skips": skipper.events(app)}
+
+
 @app.get("/state")
 def get_state(app: str = "youtube"):
     remote = _web_app(app)
     lock = _state_locks.setdefault(app, threading.Lock())
     if not lock.acquire(blocking=False):
         cached = _last_state.get(app)
-        return {**cached, "stale": True} if cached else {"app": app, "browser": "busy"}
+        return _with_skips({**cached, "stale": True} if cached else {"app": app, "browser": "busy"}, app)
     try:
         state = remote.state()
     except Busy:
         cached = _last_state.get(app)
-        return {**cached, "stale": True} if cached else {"app": app, "browser": "busy"}
+        return _with_skips({**cached, "stale": True} if cached else {"app": app, "browser": "busy"}, app)
     except PageUnresponsive as e:
         state = {"app": app, "browser": "error", "error": str(e)}
     finally:
         lock.release()
     _last_state[app] = state
+    state = _with_skips(state, app)
     player = (state or {}).get("player") or {}
     title = player.get("title")
     if isinstance(title, str) and title.strip() and app == MODE_STATE.get("lastApp"):
@@ -515,6 +536,8 @@ def _run_web(name, action, value=None):
             # open; land it back on its page before acting on it.
             park.land(name)
             out = remote.run(action, value)
+            if isinstance(out.get("state"), dict):
+                out["state"] = _with_skips(out["state"], name)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         except Busy as e:

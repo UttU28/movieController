@@ -287,7 +287,13 @@ class ChromeSession:
         return None
 
     def on_host(self, hosts):
-        """True if the driver's current tab shows one of `hosts`."""
+        """True if the driver's current tab shows one of `hosts`. Read from
+        Chrome's tab list, which (unlike asking the page through WebDriver)
+        doesn't wait for a page that's still loading."""
+        handle = self.driver.current_window_handle
+        tab = next((t for t in self._tab_list() if t["id"] == handle), None)
+        if tab is not None:
+            return _host_matches(tab.get("url"), hosts)
         return _host_matches(self.driver.execute_script("return location.host"), hosts)
 
     def follow_visible(self, hosts):
@@ -358,6 +364,28 @@ class ChromeSession:
             message = (details.get("exception") or {}).get("description") or details.get("text") or "Script error"
             raise RuntimeError(message.splitlines()[0])
         return result.get("result", {}).get("value")
+
+    def click_in_tab(self, tab, x, y, timeout=3):
+        """A real (trusted) left click at viewport point (x, y), sent over the
+        tab's own DevTools socket: no WebDriver, no tab switch, and the OS
+        pointer stays where it is."""
+        events = [
+            ("mouseMoved", {}),
+            ("mousePressed", {"button": "left", "clickCount": 1}),
+            ("mouseReleased", {"button": "left", "clickCount": 1}),
+        ]
+        try:
+            ws = websocket.create_connection(tab["webSocketDebuggerUrl"], timeout=timeout, suppress_origin=True)
+            try:
+                for i, (kind, extra) in enumerate(events, start=1):
+                    ws.send(json.dumps({"id": i, "method": "Input.dispatchMouseEvent",
+                                        "params": {"type": kind, "x": x, "y": y, **extra}}))
+                    while json.loads(ws.recv()).get("id") != i:
+                        pass
+            finally:
+                ws.close()
+        except (websocket.WebSocketException, OSError, ValueError) as e:
+            raise PageUnresponsive("The page isn't responding right now.") from e
 
     def new_background_tab(self, url):
         """Open `url` in a new tab at the end, without switching to it.
