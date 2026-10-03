@@ -6,10 +6,15 @@ end), so when a tab is missing, it and every managed tab after it are
 reopened in order. The later ones reopen at the URL they were on, so e.g. a
 Netflix episode picks up again where it was. Closing the QR tab (the last
 one) disturbs nothing else. Tabs you open yourself are left alone.
+
+A tab parked by tab_park ("about:blank#parked-<app>") counts as present —
+that's the app's tab with its memory freed, waiting to be landed on again.
 """
 
 import threading
 import time
+
+from tab_park import PARK_PREFIX
 
 CHECK_SECONDS = 2
 
@@ -29,7 +34,8 @@ class TabKeeper:
             if self.ids.get(name) in live:
                 continue
             for tab in live.values():
-                if tab["id"] not in claimed and marker in (tab.get("url") or ""):
+                url = tab.get("url") or ""
+                if tab["id"] not in claimed and (marker in url or url.startswith(PARK_PREFIX + name)):
                     self.ids[name] = tab["id"]
                     claimed.add(tab["id"])
                     break

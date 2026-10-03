@@ -23,6 +23,7 @@ import qr_page
 import wallpapers
 from prime_remote import PrimeRemote
 from tab_keeper import TabKeeper
+from tab_park import TabPark
 from youtube_remote import YouTubeRemote
 
 HOST = os.getenv("HOST", "0.0.0.0")
@@ -37,8 +38,9 @@ CORS_ORIGINS = [
 
 session = ChromeSession()
 # Power + QR-page theme, shared by every phone and the QR page itself.
-# power: "on" = phone shows the controls; "off" = playback paused, Chrome on
-#        the QR page, phone shows only the power screen.
+# power: "on" = phone shows the controls; "off" = the app tabs are parked
+#        (memory freed, places remembered), Chrome on the QR page, phone
+#        shows only the power screen.
 # mode:  QR page theme when idle: "night" (dark), "live".
 # lastApp: the app last used. The single source of truth for every phone:
 #        turning the remote on opens this app on the phone and its tab in Chrome.
@@ -86,6 +88,9 @@ keeper = TabKeeper(session, [
     ("jellyfin", web_apps["jellyfin"].HOME_URL, web_apps["jellyfin"].HOSTS[0]),
     ("qr", f"http://127.0.0.1:{PORT}/qr", f":{PORT}/qr"),
 ])
+# Powers tabs down to about:blank when they're not in use (power off, or
+# another app is showing), remembering where to put them back.
+park = TabPark(session, keeper)
 
 
 _stop_bubbles = threading.Event()
@@ -286,10 +291,25 @@ def _ensure_fullscreen():
             print(f"fullscreen failed: {e}")
 
 
-def _resume_last_app():
-    """Power on: Chrome leaves the Home screen for the last app's tab."""
+def _show_web_app(name):
+    """Bring one web app's tab to the front. If the tab is parked, it first
+    goes back to the page it was parked from, so the app reopens where it was
+    left. (land() is cheap when nothing was saved for that app.)"""
+    remote = _web_app(name)
     try:
-        _web_app(MODE_STATE["lastApp"]).show()
+        park.land(name)  # un-park before switching, so the tab is found by site
+    except Exception as e:
+        print(f"unpark {name} failed: {e}")
+    state = remote.show()
+    park.land(name)  # covers a tab freshly opened by show() after a Chrome restart
+    return state
+
+
+def _resume_last_app():
+    """Power on: Chrome leaves the Home screen for the last app's tab, back
+    on whatever that app was showing when the remote was switched off."""
+    try:
+        _show_web_app(MODE_STATE["lastApp"])
     except Exception as e:
         print(f"open {MODE_STATE['lastApp']} failed: {e}")
     _ensure_fullscreen()
@@ -355,9 +375,11 @@ def delete_wallpaper(item_id: str):
 
 @app.post("/power")
 async def set_power(request: Request):
-    """Power off: pause playback and switch Chrome to the QR page. Power on:
-    Chrome opens the last app's tab (MODE_STATE["lastApp"]) and every phone
-    shows that app's remote. Either way, Chrome goes fullscreen if it isn't."""
+    """Power off: park every app tab (playback ends, memory is freed, the
+    place is remembered) and switch Chrome to the QR page. Power on: Chrome
+    opens the last app's tab (MODE_STATE["lastApp"]) back on its saved page,
+    and every phone shows that app's remote. Either way, Chrome goes
+    fullscreen if it isn't."""
     data = await request.json()
     on = bool(data.get("on"))
     MODE_STATE["power"] = "on" if on else "off"
@@ -365,7 +387,7 @@ async def set_power(request: Request):
         await asyncio.to_thread(_resume_last_app)
     else:
         # These drive Chrome (blocking), so keep them off the event loop.
-        await asyncio.to_thread(_pause_all_playback)
+        await asyncio.to_thread(park.park_all)
         await asyncio.to_thread(_switch_to_qr)
     return await asyncio.to_thread(_mode_state)
 
@@ -385,21 +407,6 @@ def pause_all():
     """Pause every streaming tab (no tab switching)."""
     _pause_all_playback()
     return {"status": "success"}
-
-
-def _pause_other_web_apps(keep):
-    """Stop playback on every streaming tab except `keep`. Does not change
-    which tab Chrome is showing (pause runs over each tab's DevTools socket)."""
-    with session.locked(timeout=15):
-        if not session.connect(launch=False):
-            return
-        for name, remote in web_apps.items():
-            if name == keep:
-                continue
-            try:
-                remote.pause_playback()
-            except Exception as e:
-                print(f"pause {name} failed: {e}")
 
 
 def _pause_all_playback():
@@ -442,8 +449,11 @@ async def reload_qr():
 @app.post("/app")
 async def switch_app(request: Request):
     """Called when you pick an app on the phone: Chrome switches to (or opens)
-    that app's tab and comes to the front. Laptop needs nothing, and leaving
-    a stream playing while you use the laptop remote is intentional."""
+    that app's tab, back on whatever page it was left on, and comes to the
+    front. Every other app tab is then parked — ended, with its place
+    remembered — so only the showing tab costs memory. Laptop needs nothing,
+    and leaving a stream playing while you use the laptop remote is
+    intentional."""
     data = await request.json()
     name = data.get("app")
     print(f"Switch app: {name}")
@@ -451,10 +461,12 @@ async def switch_app(request: Request):
         return {"status": "success", "app": name}
     _remember_app(name)
     try:
-        await asyncio.to_thread(_pause_other_web_apps, name)
         # show() drives Chrome (seconds); run it off the event loop so the
         # rest of the API keeps answering meanwhile.
-        state = await asyncio.to_thread(_web_app(name).show)
+        state = await asyncio.to_thread(_show_web_app, name)
+        # Free the other tabs' memory once the switch is done; the phone
+        # doesn't wait for that part.
+        threading.Thread(target=park.park_all, args=(name,), daemon=True).start()
         return {"status": "success", "app": name, "state": state}
     except WebDriverException as e:
         raise HTTPException(status_code=500, detail=str(e).splitlines()[0])
@@ -466,7 +478,8 @@ async def switch_app(request: Request):
 def launch(app: str = "youtube"):
     try:
         try:
-            state = _web_app(app).show()
+            state = _show_web_app(app)
+            threading.Thread(target=park.park_all, args=(app,), daemon=True).start()
         except WebDriverException as e:
             raise HTTPException(status_code=500, detail=str(e).splitlines()[0])
         return {"status": "success", "state": state}
@@ -498,6 +511,9 @@ def _run_web(name, action, value=None):
     remote = _web_app(name)
     try:
         try:
+            # Another phone may have parked this app while its panel was
+            # open; land it back on its page before acting on it.
+            park.land(name)
             out = remote.run(action, value)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
