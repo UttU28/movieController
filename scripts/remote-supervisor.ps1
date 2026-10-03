@@ -2,6 +2,11 @@
 # Double-click "Start Remote.bat". This window watches both servers.
 # It restarts them if they crash, stop answering, or the PC wakes from sleep.
 # Output is shown in each server window and saved under logs\.
+#
+# Updates (a new commit upstream) restart only the two servers: the remote's
+# Chrome stays open and keeps playing, and the backend re-attaches to it. The
+# phone page is built into a second folder while the old one keeps serving,
+# so it's only down for the few seconds the servers take to restart.
 param(
   [ValidateSet('supervisor', 'backend', 'frontend')]
   [string]$Role = 'supervisor'
@@ -103,12 +108,43 @@ function Stop-RoleWindow([string]$Name) {
   Stop-Logged $Name
 }
 
-# Close only the remote's own Chrome (the one with the debug port), not
-# every Chrome on the PC.
-function Stop-RemoteChrome {
-  $browsers = Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.CommandLine -like '*--remote-debugging-port=9222*' -and $_.CommandLine -notlike '*--type=*' }
-  foreach ($b in $browsers) { Stop-Tree ([int]$b.ProcessId) }
+# The phone page's build folders. The server serves from the one named in
+# frontend\.next-active; an update is built into the other one meanwhile.
+$FrontendDir = Join-Path $Root 'frontend'
+$DistMarker = Join-Path $FrontendDir '.next-active'
+
+function Get-FrontendDist {
+  if (Test-Path $DistMarker) {
+    $d = (Get-Content $DistMarker -Raw).Trim()
+    if ($d -in @('.next', '.next-b')) { return $d }
+  }
+  return '.next'
+}
+
+# Build the phone page into the folder the running server isn't using, then
+# make it the active one. Returns $true when the new build is ready.
+function Build-FrontendAhead {
+  $node = (Get-Command node -ErrorAction SilentlyContinue).Source
+  $next = Join-Path $FrontendDir 'node_modules\next\dist\bin\next'
+  if (-not $node -or -not (Test-Path $next)) { return $false }
+  $target = if ((Get-FrontendDist) -eq '.next') { '.next-b' } else { '.next' }
+  Write-Log 'supervisor.log' "Building the updated phone page into $target (the current one keeps serving)..."
+  Push-Location $FrontendDir
+  $env:NEXT_DIST_DIR = $target
+  try {
+    & $node $next build 2>&1 | ForEach-Object { Write-Log 'frontend.log' "$_" }
+    $ok = ($LASTEXITCODE -eq 0)
+  } finally {
+    Remove-Item Env:NEXT_DIST_DIR -ErrorAction SilentlyContinue
+    Pop-Location
+  }
+  if ($ok) {
+    Set-Content -Path $DistMarker -Value $target -Encoding ascii
+    Write-Log 'supervisor.log' 'Updated phone page is built.'
+  } else {
+    Write-Log 'supervisor.log' 'Building the update failed; the frontend will rebuild when it restarts.'
+  }
+  return $ok
 }
 
 function Invoke-GitPull {
@@ -181,14 +217,7 @@ if ($Role -eq 'supervisor') {
           Pop-Location
 
           if ($localHash -ne $remoteHash -and $remoteHash) {
-            Write-Log 'supervisor.log' "Update available ($remoteHash). Closing Chrome and servers, then pulling…"
-            # Close the remote's Chrome window (only that one).
-            try { Stop-RemoteChrome } catch {}
-            # Close both server windows, so only the new ones run afterwards.
-            Stop-RoleWindow 'backend'
-            Stop-RoleWindow 'frontend'
-            # Wait for ports to free up, then pull.
-            Start-Sleep -Seconds 5
+            Write-Log 'supervisor.log' "Update available ($remoteHash). Chrome stays open; only the servers restart."
             $needRestart = $true
           }
         } catch {
@@ -197,21 +226,30 @@ if ($Role -eq 'supervisor') {
       }
 
       if ($needRestart) {
-        Write-Log 'supervisor.log' 'Pulling latest and restarting…'
+        # Pull and build while the old servers keep running (Python has its
+        # code loaded already, and the phone page serves from its own build
+        # folder), then swap the servers over. Chrome is never touched.
+        Write-Log 'supervisor.log' 'Pulling latest...'
         try {
           Push-Location $Root
           $out = & git pull --ff-only 2>&1 | ForEach-Object { "$_" }
           foreach ($line in $out) { Write-Log 'supervisor.log' $line }
         } catch {
-          Write-Log 'supervisor.log' "git pull failed: $_. Starting anyway."
+          Write-Log 'supervisor.log' "git pull failed: $_. Restarting anyway."
         } finally {
           Pop-Location
         }
         $needRestart = $false
-        Start-Sleep -Seconds 3
+        [void](Build-FrontendAhead)
+        Write-Log 'supervisor.log' 'Restarting the servers with the new code (Chrome stays as it is)...'
+        Stop-RoleWindow 'backend'
+        Stop-RoleWindow 'frontend'
+        Start-Sleep -Seconds 2
         Start-RoleWindow 'backend'
         Start-RoleWindow 'frontend'
         Write-Log 'supervisor.log' 'Restarted both servers with latest code'
+        $fail.backend = 0
+        $fail.frontend = 0
         continue
       }
 
@@ -292,8 +330,9 @@ while ($true) {
       continue
     }
     $file = $node
-    $workdir = Join-Path $Root 'frontend'
+    $workdir = $FrontendDir
     $port = 9283
+    $dist = Get-FrontendDist
     # Production mode by default: ~100 MB instead of the dev server's ~300+ MB
     # (and growing). Set REMOTE_FRONTEND_MODE=dev for live reload while editing.
     $frontendMode = if ($env:REMOTE_FRONTEND_MODE -eq 'dev') { 'dev' } else { 'prod' }
@@ -303,9 +342,10 @@ while ($true) {
   Clear-OurPort $port
 
   # Build the phone page (only when its code is newer than the last build),
-  # after the old server has stopped: building under a running server breaks it.
+  # after the old server has stopped: building under a running server breaks
+  # it. (An update arrives already built: see Build-FrontendAhead.)
   if ($Role -eq 'frontend' -and $frontendMode -eq 'prod') {
-    $buildId = Join-Path $workdir '.next\BUILD_ID'
+    $buildId = Join-Path $workdir "$dist\BUILD_ID"
     $sources = @(Get-ChildItem -Path (Join-Path $workdir 'src') -Recurse -File -ErrorAction SilentlyContinue) +
       @(Get-Item (Join-Path $workdir 'package.json'), (Join-Path $workdir 'next.config.mjs') -ErrorAction SilentlyContinue)
     $newest = ($sources | Measure-Object -Property LastWriteTime -Maximum).Maximum
@@ -314,10 +354,12 @@ while ($true) {
     if ($stale) {
       Write-Log 'frontend.log' 'Building the phone page (production)...'
       Push-Location $workdir
+      $env:NEXT_DIST_DIR = $dist
       try {
         & $node $next build 2>&1 | ForEach-Object { Write-Log 'frontend.log' "$_" }
         $built = ($LASTEXITCODE -eq 0)
       } finally {
+        Remove-Item Env:NEXT_DIST_DIR -ErrorAction SilentlyContinue
         Pop-Location
       }
       if (-not $built) { Write-Log 'frontend.log' 'Build failed. Running in dev mode for now.' }
@@ -337,6 +379,7 @@ while ($true) {
   $psi.StandardErrorEncoding = [Text.Encoding]::UTF8
   $psi.CreateNoWindow = $true
   $psi.EnvironmentVariables['PYTHONUNBUFFERED'] = '1'
+  if ($Role -eq 'frontend') { $psi.EnvironmentVariables['NEXT_DIST_DIR'] = $dist }
   $proc = New-Object System.Diagnostics.Process
   $proc.StartInfo = $psi
   $queue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[string]'

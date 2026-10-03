@@ -8,6 +8,10 @@ const lanAddresses = Object.values(os.networkInterfaces())
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // The supervisor builds an update into a second folder while the running
+  // server keeps serving from the first, then switches (see NEXT_DIST_DIR in
+  // scripts/remote-supervisor.ps1).
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   allowedDevOrigins: lanAddresses,
   // Hide the Next.js dev badge (the "N" in the corner).
   devIndicators: false,

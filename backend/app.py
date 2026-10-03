@@ -16,7 +16,7 @@ from selenium.common.exceptions import WebDriverException
 load_dotenv()
 
 from auto_skip import AutoSkip
-from chrome_session import Busy, ChromeSession, PageUnresponsive, dismiss_restore_bubble
+from chrome_session import Busy, ChromeSession, PageUnresponsive, chrome_running, dismiss_restore_bubble
 from cursor_warden import CursorWarden
 from jellyfin_remote import JellyfinRemote
 from laptop import LaptopControl
@@ -51,9 +51,12 @@ session = ChromeSession()
 MODE_STATE: dict = {"power": "off", "mode": "night", "lastApp": "youtube"}
 MODES = ("night", "live")
 APPS = ("youtube", "prime", "netflix", "viki", "jellyfin")
-# The theme, last app, and last title survive restarts; power always starts
-# "off" (Chrome opens on the Home screen).
+# The theme, last app, last title and power survive restarts. Power is only
+# put back when Chrome kept running through the restart (an update): the
+# remote carries on exactly where it was. A fresh Chrome starts "off", on the
+# Home screen.
 LAST_APP_FILE = Path(__file__).resolve().parent / "last_app.txt"
+POWER_FILE = LAST_APP_FILE.with_name("power.txt")
 LAST_TITLE_FILE = LAST_APP_FILE.with_name("last_title.txt")
 try:
     _saved_app = LAST_APP_FILE.read_text(encoding="utf-8").strip()
@@ -116,6 +119,8 @@ def _watch_restore_bubble():
 
 @asynccontextmanager
 async def lifespan(app):
+    if chrome_running():
+        MODE_STATE["power"] = _saved_power()
     if LAUNCH_ON_START:
         threading.Thread(target=_safe_connect, daemon=True).start()
     threading.Thread(target=_watch_restore_bubble, daemon=True).start()
@@ -143,9 +148,37 @@ def _wait_for_qr(timeout=20):
     return False
 
 
+def _saved_power():
+    try:
+        return "on" if POWER_FILE.read_text(encoding="utf-8").strip() == "on" else "off"
+    except OSError:
+        return "off"
+
+
+def _save_power(power):
+    try:
+        POWER_FILE.write_text(power, encoding="utf-8")
+    except OSError:
+        pass
+
+
 def _safe_connect():
     qr_url = f"http://127.0.0.1:{PORT}/qr"
     qr_marker = f":{PORT}/qr"
+    if chrome_running():
+        # The backend restarted under a running Chrome (e.g. an update): just
+        # re-attach. Whatever is on screen, playing or paused, stays as it is,
+        # and the phones keep the power state they had.
+        try:
+            with session.lock:
+                session.connect(launch=False)
+                keeper.check()
+        except Exception as e:
+            print(f"Re-attaching to Chrome failed: {e}")
+        print(f"Re-attached to the running Chrome (remote is {MODE_STATE['power']}).")
+        print(f"Phone remote: {qr_page.remote_url()}  (QR code at {qr_url})")
+        return
+    _save_power("off")
     try:
         _wait_for_qr()
         with session.lock:
@@ -205,6 +238,26 @@ def _web_app(name):
 @app.get("/")
 def health():
     return {"status": "ok", "message": "Remote API is running", "apps": ["laptop", *web_apps]}
+
+
+FRONTEND_CHECK_URL = f"http://127.0.0.1:{qr_page.FRONTEND_PORT}/"
+_frontend = {"ready": False, "at": 0.0}
+_frontend_lock = threading.Lock()
+
+
+@app.get("/frontend")
+def frontend_status():
+    """Whether the phone page is up and serving (not stopped, building or
+    still starting). The Home screen shows its QR code only once it is."""
+    with _frontend_lock:
+        if time.time() - _frontend["at"] > 1.5:
+            try:
+                with urllib.request.urlopen(FRONTEND_CHECK_URL, timeout=2) as r:
+                    _frontend["ready"] = r.status == 200
+            except Exception:
+                _frontend["ready"] = False
+            _frontend["at"] = time.time()
+        return {"ready": _frontend["ready"]}
 
 
 @app.get("/qr", response_class=HTMLResponse)
@@ -404,6 +457,7 @@ async def set_power(request: Request):
     data = await request.json()
     on = bool(data.get("on"))
     MODE_STATE["power"] = "on" if on else "off"
+    _save_power(MODE_STATE["power"])
     if on:
         await asyncio.to_thread(_resume_last_app)
     else:

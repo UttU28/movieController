@@ -58,6 +58,11 @@ def _debug_port_open():
         return False
 
 
+def chrome_running():
+    """True if the remote's Chrome is already up (its debug port answers)."""
+    return _debug_port_open()
+
+
 def _host_matches(url, hosts):
     return any(h in (url or "") for h in hosts)
 

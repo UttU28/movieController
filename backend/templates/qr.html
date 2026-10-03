@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-mode="{{MODE}}">
+<html lang="en" data-mode="{{MODE}}" data-frontend="wait">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -31,11 +31,22 @@
   /* Dark mode shows the wallpaper and nothing else: the clock and the QR
      code fade away, and return when Live is picked on the phone. */
   .clock,
-  .qr {
+  .qr,
+  .qr-wait {
     transition: opacity 1s ease, visibility 0s linear 1s;
   }
   [data-mode="night"] .clock,
-  [data-mode="night"] .qr {
+  [data-mode="night"] .qr,
+  [data-mode="night"] .qr-wait {
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  /* The QR code only shows once the phone page is up (it isn't while the
+     remote starts, or rebuilds after an update); until then a loader holds
+     its place, so nobody scans a code that leads nowhere. */
+  [data-frontend="wait"] .qr,
+  [data-frontend="ready"] .qr-wait {
     opacity: 0;
     visibility: hidden;
   }
@@ -118,6 +129,52 @@
     width: clamp(190px, 27vmin, 320px);
     height: auto;
   }
+
+  .qr-wait {
+    position: fixed;
+    left: 4vmin;
+    bottom: 4vmin;
+    width: calc(clamp(190px, 27vmin, 320px) + 1.8vmin);
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2.2vmin;
+    padding: 2vmin;
+    border-radius: 2.2vmin;
+    background: rgba(12, 14, 20, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 16px 50px rgba(0, 0, 0, 0.35);
+    filter: brightness(var(--qr-dim));
+    color: rgba(255, 255, 255, 0.9);
+    text-align: center;
+    user-select: none;
+  }
+  .spinner {
+    width: clamp(44px, 6vmin, 72px);
+    height: clamp(44px, 6vmin, 72px);
+    border-radius: 50%;
+    border: clamp(4px, 0.55vmin, 7px) solid rgba(255, 255, 255, 0.18);
+    border-top-color: #fff;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .qr-wait-title {
+    font-size: clamp(16px, 2.2vmin, 26px);
+    font-weight: 800;
+  }
+  .qr-wait-sub {
+    margin-top: 0.6vmin;
+    font-size: clamp(12px, 1.5vmin, 18px);
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spinner { animation-duration: 2.5s; }
+  }
 </style>
 </head>
 <body>
@@ -130,6 +187,13 @@
 </div>
 
 <div class="qr" aria-label="Scan to open the phone remote">{{QR}}</div>
+<div class="qr-wait" role="status" aria-live="polite">
+  <div class="spinner" aria-hidden="true"></div>
+  <div>
+    <div class="qr-wait-title" id="wait-title">Getting the remote ready</div>
+    <div class="qr-wait-sub" id="wait-sub">The QR code appears in a moment</div>
+  </div>
+</div>
 
 <script>
   // ---- Clock
@@ -211,6 +275,31 @@
     } catch (e) {}
   }
   setInterval(follow, 2500);
+
+  // ---- Phone page status: show the QR code only while the phone page is
+  // live. Checked often while waiting, then now and again (it goes away for a
+  // few seconds when the remote updates).
+  const waitTitle = document.getElementById("wait-title");
+  const waitSub = document.getElementById("wait-sub");
+  let frontendTimer;
+  async function checkFrontend() {
+    clearTimeout(frontendTimer);
+    let ready = false;
+    let backendUp = true;
+    try {
+      const res = await fetch("/frontend", { cache: "no-store" });
+      ready = !!(await res.json()).ready;
+    } catch (e) {
+      backendUp = false;
+    }
+    document.documentElement.dataset.frontend = ready ? "ready" : "wait";
+    if (!ready) {
+      waitTitle.textContent = backendUp ? "Getting the remote ready" : "Restarting the remote";
+      waitSub.textContent = "The QR code appears in a moment";
+    }
+    frontendTimer = setTimeout(checkFrontend, ready ? 5000 : 1500);
+  }
+  checkFrontend();
   wall.addEventListener("stalled", () => setTimeout(() => { if (document.visibilityState === "visible") wall.play().catch(() => {}); }, 2000));
 </script>
 </body>
