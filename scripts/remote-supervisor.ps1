@@ -211,12 +211,15 @@ if ($Role -eq 'supervisor') {
           $out = & git fetch --quiet 2>&1 | ForEach-Object { "$_" }
           foreach ($line in $out) { if ($line) { Write-Log 'supervisor.log' $line } }
 
-          # Compare remote HEAD with local HEAD to see if there is new code.
-          $localHash = & git rev-parse HEAD 2>$null
+          # New code means commits upstream that we don't have. A local commit
+          # that isn't pushed yet makes the hashes differ too, but has nothing
+          # to pull.
           $remoteHash = & git rev-parse '@{u}' 2>$null
+          $behind = 0
+          [void][int]::TryParse((& git rev-list --count 'HEAD..@{u}' 2>$null), [ref]$behind)
           Pop-Location
 
-          if ($localHash -ne $remoteHash -and $remoteHash) {
+          if ($behind -gt 0 -and $remoteHash) {
             Write-Log 'supervisor.log' "Update available ($remoteHash). Chrome stays open; only the servers restart."
             $needRestart = $true
           }
@@ -250,6 +253,8 @@ if ($Role -eq 'supervisor') {
         Write-Log 'supervisor.log' 'Restarted both servers with latest code'
         $fail.backend = 0
         $fail.frontend = 0
+        # The build took a while; that isn't the PC waking from sleep.
+        $tick = [datetime]::UtcNow
         continue
       }
 
