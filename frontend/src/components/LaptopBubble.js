@@ -7,15 +7,17 @@ import { buzz } from "./RemoteButton";
 
 const POS_KEY = "remote.laptopBubble";
 const SIZE = 50;
-const MARGIN = 10;
 const DRAG_SLOP = 6;
+// At rest the bubble tucks partly behind the screen edge, so it stays out of
+// the buttons (and out of the drawer's).
+const TUCK = 0.4;
 
 function clampY(y) {
   return Math.min(Math.max(y, 90), window.innerHeight - SIZE - 120);
 }
 
-// Floating laptop button. Drag it anywhere (it snaps to the nearest side and
-// remembers where you left it); tap it to open the laptop drawer, and tap it
+// Floating laptop button. Drag it anywhere (it snaps to the nearest side,
+// tucks half behind that edge, and remembers where you left it); tap it to open the laptop drawer, and tap it
 // again (it stays above the drawer) to close it.
 export default function LaptopBubble({ onTap, active = false }) {
   const [pos, setPos] = useState(null); // { side: "left" | "right", y }
@@ -38,7 +40,7 @@ export default function LaptopBubble({ onTap, active = false }) {
 
   if (!pos) return null;
 
-  const restX = pos.side === "left" ? MARGIN : window.innerWidth - SIZE - MARGIN;
+  const restX = pos.side === "left" ? -SIZE * TUCK : window.innerWidth - SIZE * (1 - TUCK);
 
   const onDown = (e) => {
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -79,7 +81,7 @@ export default function LaptopBubble({ onTap, active = false }) {
   return (
     <button
       type="button"
-      className={`laptop-bubble${drag ? " dragging" : ""}${active ? " active" : ""}`}
+      className={`laptop-bubble${drag ? " dragging" : ""}${active ? " active" : ""}${drag ? "" : ` tucked ${pos.side}`}`}
       aria-label={active ? "Close laptop control" : "Laptop control"}
       aria-expanded={active}
       style={{ transform: `translate3d(${x}px, ${y}px, 0)` }}

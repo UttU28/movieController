@@ -68,6 +68,7 @@ function useWallpapers(dev) {
 // What the phone shows while the remote is powered off: a short status,
 // the last title and app, and Turn on. The Home screen editor stays behind Theme.
 const APP_NAMES = { youtube: "YouTube", prime: "Prime Video", netflix: "Netflix", viki: "Viki", jellyfin: "Jellyfin" };
+const APP_COLORS = { youtube: "#ff0033", prime: "#1a98ff", netflix: "#e50914", viki: "#2b8cff", jellyfin: "#00a4dc" };
 
 function ToolButton({ icon, label, active = false, disabled = false, spin = false, pressed, expanded, onPress }) {
   return (
@@ -88,6 +89,53 @@ function ToolButton({ icon, label, active = false, disabled = false, spin = fals
   );
 }
 
+// Two-way switch with a sliding thumb, labelled on the left.
+function Segmented({ label, value, options, onChange }) {
+  const index = Math.max(0, options.findIndex((o) => o.id === value));
+  return (
+    <div className="seg-row">
+      <span className="seg-label">{label}</span>
+      <div className="seg" role="radiogroup" aria-label={label} style={{ "--i": index, "--n": options.length }}>
+        <span className="seg-thumb" aria-hidden="true" />
+        {options.map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            role="radio"
+            aria-checked={o.id === value}
+            className={`seg-btn${o.id === value ? " on" : ""}`}
+            onClick={() => {
+              buzz();
+              if (o.id !== value) onChange(o.id);
+            }}
+          >
+            <FontAwesomeIcon icon={o.icon} />
+            <span>{o.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Clock for the hero, set after mount so the server render never disagrees.
+function useClock() {
+  const [now, setNow] = useState(null);
+  useEffect(() => {
+    const tick = () => setNow(new Date());
+    tick();
+    const id = setInterval(tick, 15000);
+    return () => clearInterval(id);
+  }, []);
+  if (!now) return null;
+  const parts = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).formatToParts(now);
+  return {
+    time: parts.filter((p) => p.type !== "dayPeriod").map((p) => p.value).join("").trim(),
+    period: parts.find((p) => p.type === "dayPeriod")?.value,
+    date: now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }),
+  };
+}
+
 export default function PowerScreen({ mode, tvMode, busy, pcOn, lastApp, nowPlaying, dev, style, onPowerOn, onDev, onTheme, onStyle, onFullscreen }) {
   const appName = APP_NAMES[lastApp];
   const papers = useWallpapers(dev);
@@ -101,42 +149,58 @@ export default function PowerScreen({ mode, tvMode, busy, pcOn, lastApp, nowPlay
   const selected = papers.data?.selected || {};
   const posterFor = (themeId) => items.find((i) => i.id === selected[themeId])?.poster;
   const title = (nowPlaying || "").trim();
-  const sub = pcOn ? "Turn on to open the remote." : "Playback is paused.";
+  const sub = pcOn ? "Turn on to open the remote" : "Playback is paused";
+  const clock = useClock();
+  const backdrop = posterFor("live") || posterFor(mode);
 
   const closeThemes = () => setThemesOpen(false);
 
   return (
+    <>
+    {/* Ambient backdrop: the chosen wallpaper, blurred, with two slow glows.
+        Outside the layout, whose entry animation would pin it to the column. */}
+    <div className={`power-backdrop power-${mode}`} aria-hidden="true">
+      {backdrop && <span className="power-paper" style={{ backgroundImage: `url("${backdrop}")` }} />}
+      <span className="power-orb a" />
+      <span className="power-orb b" />
+    </div>
     <section className={`power-layout${themesOpen ? " themes-open" : ""}`}>
+
       <div className="power-slot" inert={themesOpen}>
         <div className="power-chrome-top">
-          <section className="card titlebar">
-            <div className="titlebar-row">
-              <div className="titlebar-text">
-                <span className="eyebrow">
-                  <i className={`power-dot${pcOn ? " on" : ""}`} aria-hidden="true" />
-                  {pcOn ? "Ready" : "Standby"}
-                </span>
-                <div className="player-title">{pcOn ? "Remote is ready" : "Remote is off"}</div>
-                <div className="selected-sub">{sub}</div>
-              </div>
-            </div>
-          </section>
-
-          {(title || appName) && (
-            <section className="card titlebar">
-              <div className="titlebar-row">
-                <div className="titlebar-text">
-                  <span className="eyebrow">Last playing</span>
-                  <MarqueeTitle text={title || appName} />
-                  {title && appName ? <div className="selected-sub">{appName}</div> : null}
-                </div>
-              </div>
-            </section>
-          )}
+          <header className="power-head">
+            <span className={`power-chip${pcOn ? " on" : ""}`}>
+              <i className={`power-dot${pcOn ? " on" : ""}`} aria-hidden="true" />
+              {pcOn ? "Ready" : "Standby"}
+            </span>
+            <span className="power-head-sub">{sub}</span>
+          </header>
         </div>
       </div>
 
       <div className="power-scroll">
+        {!themesOpen && (
+          <div className="power-hero">
+            <div className="power-clock" suppressHydrationWarning>
+              {clock ? clock.time : " "}
+              {clock?.period && <small>{clock.period}</small>}
+            </div>
+            <div className="power-date">{clock ? clock.date : " "}</div>
+            <div className="power-state">{pcOn ? "Remote is ready" : "Remote is off"}</div>
+
+            {(title || appName) && (
+              <div className="power-last" style={{ "--app": APP_COLORS[lastApp] || "var(--accent)" }}>
+                <span className="power-last-art">
+                  <FontAwesomeIcon icon={faCirclePlay} />
+                </span>
+                <span className="power-last-text">
+                  <span className="eyebrow">Last playing{appName && title ? ` · ${appName}` : ""}</span>
+                  <MarqueeTitle text={title || appName} />
+                </span>
+              </div>
+            )}
+          </div>
+        )}
         {themesOpen && (
         <div className="power-theme">
           <div className="theme-head">
@@ -286,43 +350,30 @@ export default function PowerScreen({ mode, tvMode, busy, pcOn, lastApp, nowPlay
       </div>
 
       {/* The two Home screen modes, one tap each, out in the open. */}
-      <div className="row two power-modes" role="radiogroup" aria-label="Home screen theme">
-        <ToolButton
-          icon={faMoon}
-          label="Dark"
-          active={mode === "night"}
-          pressed={mode === "night"}
-          onPress={() => mode !== "night" && onTheme("night")}
+      <div className="power-settings">
+        <Segmented
+          label="Screen"
+          value={mode}
+          onChange={onTheme}
+          options={[
+            { id: "night", icon: faMoon, label: "Dark" },
+            { id: "live", icon: faSun, label: "Live" },
+          ]}
         />
-        <ToolButton
-          icon={faSun}
-          label="Live"
-          active={mode === "live"}
-          pressed={mode === "live"}
-          onPress={() => mode !== "live" && onTheme("live")}
-        />
-      </div>
-
-      {/* Which remote you get when you turn it on: the full one, or the
-          minimal one that lives in the bubble for the extras. */}
-      <div className="row two power-modes" role="radiogroup" aria-label="Remote style">
-        <ToolButton
-          icon={faSliders}
-          label="Full"
-          active={style !== "simple"}
-          pressed={style !== "simple"}
-          onPress={() => style !== "full" && onStyle("full")}
-        />
-        <ToolButton
-          icon={faCirclePlay}
-          label="Simple"
-          active={style === "simple"}
-          pressed={style === "simple"}
-          onPress={() => style !== "simple" && onStyle("simple")}
+        {/* Which remote you get when you turn it on: the full one, or the
+            minimal one that lives in the bubble for the extras. */}
+        <Segmented
+          label="Remote"
+          value={style === "simple" ? "simple" : "full"}
+          onChange={onStyle}
+          options={[
+            { id: "full", icon: faSliders, label: "Full" },
+            { id: "simple", icon: faCirclePlay, label: "Simple" },
+          ]}
         />
       </div>
 
-      <div className="row four">
+      <div className="row four power-tools">
         <ToolButton
           icon={faRotate}
           label="Reload"
@@ -376,6 +427,7 @@ export default function PowerScreen({ mode, tvMode, busy, pcOn, lastApp, nowPlay
             onPowerOn();
           }}
         >
+          <span className="power-halo" aria-hidden="true" />
           <span className="dock-btn main">
             <FontAwesomeIcon icon={faPowerOff} />
           </span>
@@ -385,5 +437,6 @@ export default function PowerScreen({ mode, tvMode, busy, pcOn, lastApp, nowPlay
         </div>
       </div>
     </section>
+    </>
   );
 }

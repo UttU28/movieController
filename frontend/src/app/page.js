@@ -15,7 +15,7 @@ import { RemoteAppProvider } from "../lib/RemoteAppContext";
 import usePcVolumeKeys from "../lib/usePcVolumeKeys";
 import useRemote from "../lib/useRemote";
 import JellyfinPanel from "../panels/JellyfinPanel";
-import LaptopPanel, { TrackpadStatus } from "../panels/LaptopPanel";
+import LaptopPanel from "../panels/LaptopPanel";
 import NetflixPanel from "../panels/NetflixPanel";
 import PrimePanel from "../panels/PrimePanel";
 import SimpleRemote from "../panels/SimpleRemote";
@@ -52,7 +52,6 @@ export default function Home() {
   // Laptop control: a floating bubble, a slide-up drawer, or the full page.
   const [laptop, setLaptop] = useState(null); // null | "drawer" | "full"
   const [drawerClose, setDrawerClose] = useState(0);
-  const [padStatus, setPadStatus] = useState("connecting");
   // How far the switcher just travelled, so the panel slides in from the side
   // you came from over the same time as the highlight.
   const [slide, setSlide] = useState(null);
@@ -201,11 +200,10 @@ export default function Home() {
             Back
           </button>
           <div className="page-title">
-            <h1>Laptop Control</h1>
-            <TrackpadStatus status={padStatus} />
+            <h1>Laptop</h1>
           </div>
         </header>
-        <LaptopPanel variant="full" onStatus={setPadStatus} />
+        <LaptopPanel variant="full" />
       </main>
     );
   }

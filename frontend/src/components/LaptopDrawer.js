@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPowerOff, faUpRightAndDownLeftFromCenter } from "@fortawesome/free-solid-svg-icons";
 import AppSwitcher from "./AppSwitcher";
-import LaptopPanel, { TrackpadStatus } from "../panels/LaptopPanel";
+import LaptopPanel from "../panels/LaptopPanel";
 import RemoteExtras from "./RemoteExtras";
 import { buzz } from "./RemoteButton";
 
@@ -20,7 +20,6 @@ const ANIM_MS = 260;
 export default function LaptopDrawer({ app, style, onChoose, onPowerOff, onClose, onMore, closeSignal = 0 }) {
   const simple = style === "simple";
   const [shown, setShown] = useState(false);
-  const [padStatus, setPadStatus] = useState("connecting");
   const [pull, setPull] = useState(0);
   const drag = useRef(null);
   const openedAt = useRef(0);
@@ -100,7 +99,6 @@ export default function LaptopDrawer({ app, style, onChoose, onPowerOff, onClose
           <span className="grip" aria-hidden="true" />
           <div className="drawer-title">
             <span>{simple ? "Remote" : "Laptop"}</span>
-            {!simple && <TrackpadStatus status={padStatus} />}
           </div>
           <button
             type="button"
@@ -134,7 +132,7 @@ export default function LaptopDrawer({ app, style, onChoose, onPowerOff, onClose
               <FontAwesomeIcon icon={faPowerOff} />
             </button>
           </div>
-          {simple ? <RemoteExtras app={app} /> : <LaptopPanel variant="drawer" onStatus={setPadStatus} />}
+          {simple ? <RemoteExtras app={app} /> : <LaptopPanel variant="drawer" />}
         </div>
       </section>
     </div>

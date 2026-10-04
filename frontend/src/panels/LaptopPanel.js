@@ -91,16 +91,6 @@ const APPS = [
   { id: "taskManager", icon: faListCheck, label: "Task Mgr" },
 ];
 
-export function TrackpadStatus({ status }) {
-  const live = status === "open";
-  return (
-    <span className={`page-pill muted conn-pill ${live ? "ok" : "bad"}`}>
-      <span className="dot" />
-      {live ? "Trackpad live" : "Trackpad reconnecting…"}
-    </span>
-  );
-}
-
 // Just the status light, floated over the trackpad's top-right corner.
 export function TrackpadDot({ status }) {
   const live = status === "open";
@@ -170,7 +160,7 @@ export function useTrackpadSensitivity() {
   return [sensitivity, change];
 }
 
-export default function LaptopPanel({ variant = "full", onStatus }) {
+export default function LaptopPanel({ variant = "full" }) {
   const full = variant === "full";
   const { error, action } = useRemote("laptop", { poll: false });
   const { status, send } = usePointerSocket();
@@ -186,15 +176,12 @@ export default function LaptopPanel({ variant = "full", onStatus }) {
 
   const typeText = (text) => action("type", { value: text });
 
-  useEffect(() => {
-    onStatus?.(status);
-  }, [status, onStatus]);
-
   return (
     <div className={`laptop laptop-${variant}`}>
       <section className="card laptop-status">
-        <div className="pad-wrap">
+        <div className="pad-wrap pad-wrap-dot">
           <Trackpad send={send} sensitivity={sensitivity} />
+          <TrackpadDot status={status} />
         </div>
 
         {full && (
@@ -281,7 +268,7 @@ export default function LaptopPanel({ variant = "full", onStatus }) {
         ))}
       </div>
       <TextSend
-        placeholder="Open any app by name (Start search)"
+        placeholder="Open an app by name…"
         button="Open"
         onSend={(name) => {
           buzz();
