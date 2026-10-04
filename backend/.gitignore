@@ -1,10 +1,18 @@
 .env
 venv/
 __pycache__/
+.DS_Store
 chrome-profile/
-qr_theme.txt
+# Local state (see dataFiles.py)
 wallpapers.json
+lastApp.txt
+lastTitle.txt
+qrTheme.txt
+parkedTabs.json
+power.txt
+*.tmp
+# Old names, moved to the ones above on first start
 last_app.txt
 last_title.txt
+qr_theme.txt
 parked_tabs.json
-power.txt

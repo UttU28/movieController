@@ -9,7 +9,7 @@
 // that hid its cursor, or over fullscreen video where Chrome hides it. When
 // the real cursor is showing, nothing is drawn.
 //
-// Installed by the backend (cursor_warden.py) into every managed tab every
+// Installed by the backend (cursorWarden.py) into every managed tab every
 // couple of seconds; the version guard makes a re-inject a no-op, and a page
 // reload simply reinstalls it.
 (() => {

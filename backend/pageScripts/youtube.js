@@ -415,17 +415,6 @@
       return true;
     },
 
-    pause() {
-      let stopped = false;
-      document.querySelectorAll('video').forEach((v) => {
-        if (!v.paused && !v.ended) {
-          v.pause();
-          stopped = true;
-        }
-      });
-      return stopped;
-    },
-
     seek(delta) {
       const v = video();
       if (!v) return false;

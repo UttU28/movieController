@@ -7,27 +7,28 @@ reopened in order. The later ones reopen at the URL they were on, so e.g. a
 Netflix episode picks up again where it was. Closing the QR tab (the last
 one) disturbs nothing else. Tabs you open yourself are left alone.
 
-A tab parked by tab_park ("about:blank#parked-<app>") counts as present —
+A tab parked by tabPark ("about:blank#parked-<app>") counts as present —
 that's the app's tab with its memory freed, waiting to be landed on again.
 """
 
-import threading
-import time
-
-from tab_park import PARK_PREFIX
-
-CHECK_SECONDS = 2
+from beat import Beat
+from tabPark import PARK_PREFIX
 
 
-class TabKeeper:
+class TabKeeper(Beat):
+    LABEL = "Tab keeper"
+
     def __init__(self, session, tabs):
-        """`tabs`: [(name, home_url, url_marker)] in the order to keep."""
-        self.session = session
+        """`tabs`: [(name, homeUrl, urlMarker)] in the order to keep."""
+        super().__init__(session)
         self.tabs = tabs
         self.ids = {}  # name -> Chrome tab id
-        self._stop = threading.Event()
 
-    def _claim_existing(self, live):
+    def appMarkers(self):
+        """{name: URL marker} for the app tabs (everything but the QR page)."""
+        return {name: marker for name, _, marker in self.tabs if name != "qr"}
+
+    def claimExisting(self, live):
         """Adopt already-open tabs (e.g. after a backend restart) by URL."""
         claimed = set(self.ids.values())
         for name, _, marker in self.tabs:
@@ -43,47 +44,28 @@ class TabKeeper:
     def check(self):
         """Reopen missing tabs so the order stays intact. Returns the names
         that were (re)opened."""
-        live = {t["id"]: t for t in self.session._tab_list()}
+        live = {t["id"]: t for t in self.session.tabList()}
         if not live:
             return []
-        self._claim_existing(live)
+        self.claimExisting(live)
         missing = [i for i, (name, _, _) in enumerate(self.tabs) if self.ids.get(name) not in live]
         if not missing:
             return []
 
-        first = missing[0]
-        reopened = []
+        later = self.tabs[missing[0]:]
         # Close the managed tabs after the gap, remembering where they were...
         urls = {}
-        for name, _, _ in self.tabs[first:]:
+        for name, _, _ in later:
             tab = live.get(self.ids.get(name))
             if tab:
                 urls[name] = tab.get("url")
-                self.session.close_tab(tab["id"])
+                self.session.closeTab(tab["id"])
         # ...then open everything from the gap onwards, in order.
-        for name, home, _ in self.tabs[first:]:
-            self.ids[name] = self.session.new_background_tab(urls.get(name) or home)
-            reopened.append(name)
-        return reopened
+        for name, home, _ in later:
+            self.ids[name] = self.session.newBackgroundTab(urls.get(name) or home)
+        return [name for name, _, _ in later]
 
-    def run_forever(self):
-        while not self._stop.wait(CHECK_SECONDS):
-            # Skip this round if Chrome is busy; there's another in 2 seconds.
-            if not self.session.lock.acquire(timeout=1):
-                continue
-            try:
-                # Only while Chrome is running; never relaunch it from here.
-                if self.session.connect(launch=False):
-                    reopened = self.check()
-                    if reopened:
-                        print(f"Reopened tabs: {', '.join(reopened)}")
-            except Exception as e:
-                print(f"Tab keeper: {e}")
-            finally:
-                self.session.lock.release()
-
-    def start(self):
-        threading.Thread(target=self.run_forever, daemon=True).start()
-
-    def stop(self):
-        self._stop.set()
+    def tick(self):
+        reopened = self.check()
+        if reopened:
+            print(f"Reopened tabs: {', '.join(reopened)}")

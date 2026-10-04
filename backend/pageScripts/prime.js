@@ -361,13 +361,6 @@
       return markForClick(playerButton(/^Next Episode/i) || (p && p.querySelector('.atvwebplayersdk-nextupcard-button')));
     },
 
-    pause() {
-      const v = video();
-      if (!v || v.paused) return false;
-      v.pause();
-      return true;
-    },
-
     volume(delta) {
       const v = video();
       if (!v) return null;

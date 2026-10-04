@@ -4,8 +4,7 @@ any phone on the Wi-Fi can scan it and open the remote.
 The page is templates/qr.html: edit it freely; {{QR}} becomes the QR code
 (inline SVG), {{URL}} the remote's address, {{MODE}} the starting theme
 ("night" or "live") and {{VIDEO}} / {{POSTER}} the wallpaper; the page then
-follows /mode by itself.
-Re-read on every request.
+follows /mode by itself. Re-read on every request.
 """
 
 import html
@@ -17,35 +16,36 @@ import segno
 
 FRONTEND_PORT = int(os.getenv("FRONTEND_PORT", "9283"))
 TEMPLATE = Path(__file__).resolve().parent / "templates" / "qr.html"
+MODES = ("night", "live")
 
 
-def lan_ip():
+def lanIp():
     """This PC's address on the local network (the interface used to reach
     the internet; no packets are actually sent)."""
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        s.connect(("10.255.255.255", 1))
-        return s.getsockname()[0]
+        sock.connect(("10.255.255.255", 1))
+        return sock.getsockname()[0]
     except OSError:
         return "127.0.0.1"
     finally:
-        s.close()
+        sock.close()
 
 
-def remote_url():
-    return os.getenv("FRONTEND_URL", "").strip() or f"http://{lan_ip()}:{FRONTEND_PORT}"
+def remoteUrl():
+    return os.getenv("FRONTEND_URL", "").strip() or f"http://{lanIp()}:{FRONTEND_PORT}"
 
 
 def render(mode="night", wallpaper=None):
     mode = (mode or "night").lower()
-    if mode not in ("night", "live"):
+    if mode not in MODES:
         mode = "night"
     paper = wallpaper or {}
-    url = remote_url()
+    url = remoteUrl()
     svg = segno.make(url, error="m").svg_inline(scale=10, border=2, dark="#000", light="#fff", omitsize=True)
-    page = TEMPLATE.read_text(encoding="utf-8")
     return (
-        page.replace("{{QR}}", svg)
+        TEMPLATE.read_text(encoding="utf-8")
+        .replace("{{QR}}", svg)
         .replace("{{URL}}", html.escape(url))
         .replace("{{MODE}}", mode)
         .replace("{{VIDEO}}", html.escape(paper.get("video") or ""))

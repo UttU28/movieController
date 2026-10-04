@@ -192,7 +192,7 @@ always gets you back out, even after the backend restarted.
 
 - `GET /state?app=youtube|prime|netflix|jellyfin` returns the page type, highlighted item (`focus`), title/seasons/episodes (Prime `detail`), player info, and whether Chrome is running / showing that app
 - `POST /app {"app": "laptop|youtube|prime|netflix|jellyfin"}` switches Chrome to that app's tab and brings it forward
-- `POST /action {"app": "...", "action": "...", "value": ...}` runs an action (see `_do_*` in `youtube_remote.py` / `prime_remote.py` / `netflix_remote.py` / `jellyfin_remote.py`, and `LaptopControl.run` in `laptop.py`)
+- `POST /action {"app": "...", "action": "...", "value": ...}` runs an action (action `playPause` runs `_doPlayPause` in `youtubeRemote.py` / `primeRemote.py` / `netflixRemote.py` / `vikiRemote.py` / `jellyfinRemote.py`; laptop actions are in `LaptopControl.run` in `laptop.py`)
 - `POST /search {"app": "youtube|prime|netflix|jellyfin", "query": "..."}`
 - `WS /ws/pointer` trackpad stream: `{"t":"m",dx,dy}`, `{"t":"s",dy}`, `{"t":"c",b,double}`, `{"t":"d",on}`
 - `GET /screenshot?app=...` returns a PNG of that app's tab (this activates the tab)

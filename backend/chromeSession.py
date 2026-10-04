@@ -23,19 +23,32 @@ from pathlib import Path
 
 import websocket
 from selenium import webdriver
-from selenium.common.exceptions import TimeoutException, WebDriverException
+from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.chrome.options import Options
 
-import window_focus
+import windowFocus
 
 DEBUG_PORT = int(os.getenv("CHROME_DEBUG_PORT", "9222"))
+DEBUG_URL = f"http://127.0.0.1:{DEBUG_PORT}"
 PROFILE_DIR = os.getenv("CHROME_PROFILE_DIR", "").strip() or str(
     Path(os.getenv("LOCALAPPDATA", Path.home())) / "YouTubeRemote" / "chrome-profile"
 )
 START_URL = "https://www.youtube.com/"
+PAGE_SCRIPTS = Path(__file__).resolve().parent / "pageScripts"
+
+# How long a page may take before we give up on it. A site that hangs (a
+# slow Jellyfin server, a stuck Prime page) must never hold up the remote.
+SCRIPT_TIMEOUT = 8
+PAGE_LOAD_TIMEOUT = 25
+EVAL_TIMEOUT = 8
 
 
-def _find_chrome():
+def pageScript(name):
+    """The source of one of the scripts injected into the app tabs."""
+    return (PAGE_SCRIPTS / name).read_text(encoding="utf-8")
+
+
+def findChrome():
     configured = os.getenv("CHROME_BINARY", "").strip()
     if configured:
         return configured
@@ -44,30 +57,26 @@ def _find_chrome():
         Path(os.getenv("PROGRAMFILES(X86)", r"C:\Program Files (x86)")) / "Google/Chrome/Application/chrome.exe",
         Path(os.getenv("LOCALAPPDATA", "")) / "Google/Chrome/Application/chrome.exe",
     ]
-    for c in candidates:
-        if c.is_file():
-            return str(c)
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
     return shutil.which("chrome") or shutil.which("google-chrome") or "chrome"
 
 
-def _debug_port_open():
+def chromeRunning():
+    """True if the remote's Chrome is already up (its debug port answers)."""
     try:
-        urllib.request.urlopen(f"http://127.0.0.1:{DEBUG_PORT}/json/version", timeout=0.5)
+        urllib.request.urlopen(f"{DEBUG_URL}/json/version", timeout=0.5)
         return True
     except OSError:
         return False
 
 
-def chrome_running():
-    """True if the remote's Chrome is already up (its debug port answers)."""
-    return _debug_port_open()
+def hostMatches(url, hosts):
+    return any(host in (url or "") for host in hosts)
 
 
-def _host_matches(url, hosts):
-    return any(h in (url or "") for h in hosts)
-
-
-def _mark_profile_clean():
+def markProfileClean():
     """Tell Chrome the last session ended normally, so it doesn't offer to
     restore pages the next time it opens. Only safe while Chrome is closed;
     the file is locked (and rewritten) while it's running."""
@@ -85,8 +94,8 @@ def _mark_profile_clean():
 
 
 # Close the "Restore pages? Chrome didn't shut down correctly" bubble when it
-# is already on screen. The flag above only helps the next launch.
-_BUBBLE_SCRIPT = r"""
+# is already on screen. markProfileClean() only helps the next launch.
+BUBBLE_SCRIPT = r"""
 Add-Type -AssemblyName UIAutomationClient
 $root = [System.Windows.Automation.AutomationElement]::RootElement
 $winCond = New-Object System.Windows.Automation.PropertyCondition(
@@ -112,18 +121,16 @@ foreach ($w in $windows) {
   }
 }
 """
-_bubble_lock = threading.Lock()
+bubbleLock = threading.Lock()
 
 
-def dismiss_restore_bubble():
+def dismissRestoreBubble():
     """Click away Chrome's restore-pages bubble if it is showing."""
-    if os.name != "nt":
-        return
-    if not _bubble_lock.acquire(blocking=False):
+    if os.name != "nt" or not bubbleLock.acquire(blocking=False):
         return
     try:
         subprocess.run(
-            ["powershell", "-NoProfile", "-NonInteractive", "-Command", _BUBBLE_SCRIPT],
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", BUBBLE_SCRIPT],
             timeout=12,
             check=False,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
@@ -134,14 +141,23 @@ def dismiss_restore_bubble():
     except (OSError, subprocess.TimeoutExpired):
         pass
     finally:
-        _bubble_lock.release()
+        bubbleLock.release()
 
 
-# How long a page may take before we give up on it. A site that hangs (a
-# slow Jellyfin server, a stuck Prime page) must never hold up the remote.
-SCRIPT_TIMEOUT = 8
-PAGE_LOAD_TIMEOUT = 25
-EVAL_TIMEOUT = 8
+def cdpSend(tab, commands, timeout):
+    """Send DevTools commands [(method, params)] in order over a tab's own
+    socket, which needs no WebDriver and activates nothing. Returns the reply
+    to the last one."""
+    ws = websocket.create_connection(tab["webSocketDebuggerUrl"], timeout=timeout, suppress_origin=True)
+    try:
+        for msgId, (method, params) in enumerate(commands, start=1):
+            ws.send(json.dumps({"id": msgId, "method": method, "params": params}))
+            reply = json.loads(ws.recv())
+            while reply.get("id") != msgId:
+                reply = json.loads(ws.recv())
+    finally:
+        ws.close()
+    return reply
 
 
 class Busy(RuntimeError):
@@ -157,14 +173,14 @@ class ChromeSession:
         self.driver = None
         self.lock = threading.RLock()
         # Set when TV mode is on, so un-minimizing goes back to fullscreen.
-        self._tv_before_minimize = False
+        self.tvBeforeMinimize = False
 
     # ------------------------------------------------------------------ process
 
-    def _start_chrome(self):
+    def startChrome(self):
         """Start a real (non-chromedriver) Chrome that outlives this process."""
         args = [
-            _find_chrome(),
+            findChrome(),
             f"--remote-debugging-port={DEBUG_PORT}",
             f"--user-data-dir={PROFILE_DIR}",
             "--autoplay-policy=no-user-gesture-required",
@@ -178,7 +194,7 @@ class ChromeSession:
             "--start-maximized",
             START_URL,
         ]
-        _mark_profile_clean()
+        markProfileClean()
         popen = dict(close_fds=True, stdin=subprocess.DEVNULL,
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         if os.name == "nt":
@@ -186,39 +202,39 @@ class ChromeSession:
             # not this process: stopping the backend (Ctrl+C, closing the
             # terminal, killing its process tree) leaves Chrome running.
             flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
-            cmdline = 'start "" ' + subprocess.list2cmdline(args)
+            cmdLine = 'start "" ' + subprocess.list2cmdline(args)
             try:
-                subprocess.Popen(cmdline, shell=True,
+                subprocess.Popen(cmdLine, shell=True,
                                  creationflags=flags | subprocess.CREATE_BREAKAWAY_FROM_JOB, **popen)
             except OSError:
-                subprocess.Popen(cmdline, shell=True, creationflags=flags, **popen)
+                subprocess.Popen(cmdLine, shell=True, creationflags=flags, **popen)
         else:
             subprocess.Popen(args, start_new_session=True, **popen)
         end = time.time() + 20
         while time.time() < end:
-            if _debug_port_open():
+            if chromeRunning():
                 return
             time.sleep(0.3)
         raise WebDriverException(f"Chrome did not open debug port {DEBUG_PORT}")
 
-    def _attach(self, launch):
-        if not _debug_port_open():
+    def attach(self, launch):
+        if not chromeRunning():
             if not launch:
                 return False
-            self._start_chrome()
-        opts = Options()
-        opts.debugger_address = f"127.0.0.1:{DEBUG_PORT}"
-        self.driver = webdriver.Chrome(options=opts)
+            self.startChrome()
+        options = Options()
+        options.debugger_address = f"127.0.0.1:{DEBUG_PORT}"
+        self.driver = webdriver.Chrome(options=options)
         # Never wait minutes on a page that hangs.
         self.driver.set_script_timeout(SCRIPT_TIMEOUT)
         self.driver.set_page_load_timeout(PAGE_LOAD_TIMEOUT)
         # chromedriver attaches to an arbitrary tab; start on the one showing.
-        visible = self._visible_tab_id()
+        visible = self.visibleTabId()
         if visible in self.driver.window_handles:
             self.driver.switch_to.window(visible)
         return True
 
-    def _alive(self):
+    def alive(self):
         if self.driver is None:
             return False
         try:
@@ -230,7 +246,7 @@ class ChromeSession:
             except WebDriverException:
                 # The tab we were on was closed. Move to the tab Chrome is
                 # already showing, so nothing visibly changes.
-                visible = self._visible_tab_id()
+                visible = self.visibleTabId()
                 self.driver.switch_to.window(visible if visible in handles else handles[-1])
             return True
         except WebDriverException:
@@ -248,90 +264,10 @@ class ChromeSession:
     def connect(self, launch):
         """Attach to Chrome if needed. Returns False when Chrome isn't running
         and launch is False."""
-        if self._alive():
+        if self.alive():
             return True
         self.teardown()
-        return self._attach(launch)
-
-    # ------------------------------------------------------------------ tabs
-
-    def _tab_list(self):
-        """Page targets from Chrome's DevTools list. Reading it doesn't
-        activate anything (unlike switch_to.window)."""
-        try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{DEBUG_PORT}/json/list", timeout=2) as r:
-                return [t for t in json.load(r) if t.get("type") == "page"]
-        except OSError:
-            return []
-
-    def _visible_tab_id(self, tabs=None):
-        """The tab Chrome is showing, found by asking each tab over its own
-        DevTools socket (which, unlike switching to it, activates nothing)."""
-        for tab in tabs if tabs is not None else self._tab_list():
-            url = tab.get("webSocketDebuggerUrl")
-            if not url:
-                continue
-            try:
-                ws = websocket.create_connection(url, timeout=1, suppress_origin=True)
-                try:
-                    ws.send(json.dumps({"id": 1, "method": "Runtime.evaluate",
-                                        "params": {"expression": "document.visibilityState", "returnByValue": True}}))
-                    reply = json.loads(ws.recv())
-                finally:
-                    ws.close()
-            except (OSError, websocket.WebSocketException, ValueError):
-                continue
-            if reply.get("result", {}).get("result", {}).get("value") == "visible":
-                return tab["id"]
-        # Chrome covered by another app: every tab says "hidden", but the
-        # window title still names the active tab.
-        titles = window_focus.active_tab_titles(window_focus.pid_listening_on(DEBUG_PORT))
-        for tab in tabs if tabs is not None else self._tab_list():
-            if tab.get("title") and tab["title"] in titles:
-                return tab["id"]
-        return None
-
-    def on_host(self, hosts):
-        """True if the driver's current tab shows one of `hosts`. Read from
-        Chrome's tab list, which (unlike asking the page through WebDriver)
-        doesn't wait for a page that's still loading."""
-        handle = self.driver.current_window_handle
-        tab = next((t for t in self._tab_list() if t["id"] == handle), None)
-        if tab is not None:
-            return _host_matches(tab.get("url"), hosts)
-        return _host_matches(self.driver.execute_script("return location.host"), hosts)
-
-    def follow_visible(self, hosts):
-        """If the tab Chrome is showing is one of `hosts` (say you switched to
-        it by hand), move the driver there. It's already the visible tab, so
-        nothing changes on screen. Returns True if the driver is on `hosts`."""
-        if self.on_host(hosts):
-            return True
-        tabs = [t for t in self._tab_list() if _host_matches(t.get("url"), hosts)]
-        visible = self._visible_tab_id(tabs) if tabs else None
-        if visible and visible in self.driver.window_handles:
-            self.driver.switch_to.window(visible)
-            return True
-        return False
-
-    def use_tab(self, hosts, url):
-        """Point the driver at a tab showing one of `hosts`: the current tab if
-        it already does, else an existing matching tab, else a new tab at `url`.
-        Moving to another tab activates it in Chrome, so this only runs for
-        commands and app switches, never for status polls."""
-        if self.follow_visible(hosts):
-            return
-        handles = self.driver.window_handles
-        for tab in self._tab_list():
-            if tab["id"] in handles and _host_matches(tab.get("url"), hosts):
-                self.driver.switch_to.window(tab["id"])
-                return
-        self.driver.switch_to.new_window("tab")
-        self.driver.get(url)
-
-    def find_tab(self, hosts):
-        """First tab showing one of `hosts` (DevTools target dict), or None."""
-        return next((t for t in self._tab_list() if _host_matches(t.get("url"), hosts)), None)
+        return self.attach(launch)
 
     @contextmanager
     def locked(self, timeout):
@@ -344,23 +280,90 @@ class ChromeSession:
         finally:
             self.lock.release()
 
-    def eval_in_tab(self, tab, expression, timeout=EVAL_TIMEOUT):
+    # ------------------------------------------------------------------ tabs
+
+    def tabList(self):
+        """Page targets from Chrome's DevTools list. Reading it doesn't
+        activate anything (unlike switch_to.window)."""
+        try:
+            with urllib.request.urlopen(f"{DEBUG_URL}/json/list", timeout=2) as response:
+                return [t for t in json.load(response) if t.get("type") == "page"]
+        except OSError:
+            return []
+
+    def visibleTabId(self, tabs=None):
+        """The tab Chrome is showing, found by asking each tab over its own
+        DevTools socket (which, unlike switching to it, activates nothing)."""
+        tabs = self.tabList() if tabs is None else tabs
+        for tab in tabs:
+            if not tab.get("webSocketDebuggerUrl"):
+                continue
+            try:
+                reply = cdpSend(tab, [("Runtime.evaluate", {
+                    "expression": "document.visibilityState", "returnByValue": True})], timeout=1)
+            except (OSError, websocket.WebSocketException, ValueError):
+                continue
+            if reply.get("result", {}).get("result", {}).get("value") == "visible":
+                return tab["id"]
+        # Chrome covered by another app: every tab says "hidden", but the
+        # window title still names the active tab.
+        titles = windowFocus.activeTabTitles(windowFocus.pidListeningOn(DEBUG_PORT))
+        for tab in tabs:
+            if tab.get("title") and tab["title"] in titles:
+                return tab["id"]
+        return None
+
+    def onHost(self, hosts):
+        """True if the driver's current tab shows one of `hosts`. Read from
+        Chrome's tab list, which (unlike asking the page through WebDriver)
+        doesn't wait for a page that's still loading."""
+        handle = self.driver.current_window_handle
+        tab = next((t for t in self.tabList() if t["id"] == handle), None)
+        if tab is not None:
+            return hostMatches(tab.get("url"), hosts)
+        return hostMatches(self.driver.execute_script("return location.host"), hosts)
+
+    def followVisible(self, hosts):
+        """If the tab Chrome is showing is one of `hosts` (say you switched to
+        it by hand), move the driver there. It's already the visible tab, so
+        nothing changes on screen. Returns True if the driver is on `hosts`."""
+        if self.onHost(hosts):
+            return True
+        tabs = [t for t in self.tabList() if hostMatches(t.get("url"), hosts)]
+        visible = self.visibleTabId(tabs) if tabs else None
+        if visible and visible in self.driver.window_handles:
+            self.driver.switch_to.window(visible)
+            return True
+        return False
+
+    def useTab(self, hosts, url):
+        """Point the driver at a tab showing one of `hosts`: the current tab if
+        it already does, else an existing matching tab, else a new tab at `url`.
+        Moving to another tab activates it in Chrome, so this only runs for
+        commands and app switches, never for status polls."""
+        if self.followVisible(hosts):
+            return
+        handles = self.driver.window_handles
+        for tab in self.tabList():
+            if tab["id"] in handles and hostMatches(tab.get("url"), hosts):
+                self.driver.switch_to.window(tab["id"])
+                return
+        self.driver.switch_to.new_window("tab")
+        self.driver.get(url)
+
+    def findTab(self, hosts):
+        """First tab showing one of `hosts` (DevTools target dict), or None."""
+        return next((t for t in self.tabList() if hostMatches(t.get("url"), hosts)), None)
+
+    def evalInTab(self, tab, expression, timeout=EVAL_TIMEOUT):
         """Run JS in a tab over its own DevTools socket and return the result
         (promises are awaited). Doesn't need the WebDriver or the tab to be in
         front, and doesn't activate it. Raises PageUnresponsive if the page
         doesn't answer within `timeout` seconds."""
         try:
-            ws = websocket.create_connection(tab["webSocketDebuggerUrl"], timeout=timeout, suppress_origin=True)
-            try:
-                ws.send(json.dumps({"id": 1, "method": "Runtime.evaluate", "params": {
-                    "expression": expression, "returnByValue": True, "awaitPromise": True,
-                    "timeout": int(timeout * 1000)}}))
-                while True:
-                    reply = json.loads(ws.recv())
-                    if reply.get("id") == 1:
-                        break
-            finally:
-                ws.close()
+            reply = cdpSend(tab, [("Runtime.evaluate", {
+                "expression": expression, "returnByValue": True, "awaitPromise": True,
+                "timeout": int(timeout * 1000)})], timeout)
         except (websocket.WebSocketException, OSError, ValueError) as e:
             raise PageUnresponsive("The page isn't responding right now.") from e
         result = reply.get("result", {})
@@ -370,200 +373,82 @@ class ChromeSession:
             raise RuntimeError(message.splitlines()[0])
         return result.get("result", {}).get("value")
 
-    def click_in_tab(self, tab, x, y, timeout=3):
+    def clickInTab(self, tab, x, y, timeout=3):
         """A real (trusted) left click at viewport point (x, y), sent over the
         tab's own DevTools socket: no WebDriver, no tab switch, and the OS
         pointer stays where it is."""
-        events = [
-            ("mouseMoved", {}),
-            ("mousePressed", {"button": "left", "clickCount": 1}),
-            ("mouseReleased", {"button": "left", "clickCount": 1}),
-        ]
+        press = {"button": "left", "clickCount": 1}
+        events = [("mouseMoved", {}), ("mousePressed", press), ("mouseReleased", press)]
         try:
-            ws = websocket.create_connection(tab["webSocketDebuggerUrl"], timeout=timeout, suppress_origin=True)
-            try:
-                for i, (kind, extra) in enumerate(events, start=1):
-                    ws.send(json.dumps({"id": i, "method": "Input.dispatchMouseEvent",
-                                        "params": {"type": kind, "x": x, "y": y, **extra}}))
-                    while json.loads(ws.recv()).get("id") != i:
-                        pass
-            finally:
-                ws.close()
+            cdpSend(tab, [("Input.dispatchMouseEvent", {"type": kind, "x": x, "y": y, **extra})
+                          for kind, extra in events], timeout)
         except (websocket.WebSocketException, OSError, ValueError) as e:
             raise PageUnresponsive("The page isn't responding right now.") from e
 
-    def new_background_tab(self, url):
+    def newBackgroundTab(self, url):
         """Open `url` in a new tab at the end, without switching to it.
         Returns the new tab's id."""
         return self.driver.execute_cdp_cmd("Target.createTarget", {"url": url, "background": True})["targetId"]
 
-    def close_tab(self, tab_id):
+    def closeTab(self, tabId):
         try:
-            urllib.request.urlopen(f"http://127.0.0.1:{DEBUG_PORT}/json/close/{tab_id}", timeout=2)
+            urllib.request.urlopen(f"{DEBUG_URL}/json/close/{tabId}", timeout=2)
         except OSError:
             pass
 
     # ------------------------------------------------------------------ window
 
-    def _window_id(self):
+    def windowId(self):
         return self.driver.execute_cdp_cmd("Browser.getWindowForTarget", {})["windowId"]
 
-    def window_state(self):
+    def windowState(self):
         try:
             return self.driver.execute_cdp_cmd(
-                "Browser.getWindowBounds", {"windowId": self._window_id()}
+                "Browser.getWindowBounds", {"windowId": self.windowId()}
             )["bounds"].get("windowState", "normal")
         except WebDriverException:
             return "unknown"
 
-    def set_window_state(self, window_state):
+    def setWindowState(self, windowState):
         self.driver.execute_cdp_cmd(
             "Browser.setWindowBounds",
-            {"windowId": self._window_id(), "bounds": {"windowState": window_state}},
+            {"windowId": self.windowId(), "bounds": {"windowState": windowState}},
         )
 
-    def bring_to_front(self):
+    def bringToFront(self):
         """Show the driver's tab and bring Chrome in front of other apps and
         popups, un-minimizing it (and keeping F11 TV mode) if needed."""
-        if self.window_state() == "minimized":
+        if self.windowState() == "minimized":
             # A minimized window has to go back to "normal" before any other state.
-            self.set_window_state("normal")
-            self.set_window_state("fullscreen" if self._tv_before_minimize else "maximized")
+            self.setWindowState("normal")
+            self.setWindowState("fullscreen" if self.tvBeforeMinimize else "maximized")
         self.driver.execute_cdp_cmd("Page.bringToFront", {})
-        return window_focus.focus_chrome(window_focus.pid_listening_on(DEBUG_PORT), self.driver.title)
+        return windowFocus.focusChrome(windowFocus.pidListeningOn(DEBUG_PORT), self.driver.title)
 
     @property
-    def tv_mode(self):
+    def tvMode(self):
         """TV mode = the Chrome window is fullscreen (F11). Read from Chrome
         every time, so it's right even after the backend restarts."""
-        return self.window_state() == "fullscreen"
+        return self.windowState() == "fullscreen"
 
-    def toggle_tv_mode(self):
+    def toggleTvMode(self):
         """Toggle the whole Chrome window between fullscreen (F11) and maximized."""
-        state = self.window_state()
+        state = self.windowState()
         # Chrome only changes fullscreen/minimized windows via "normal".
         if state in ("minimized", "fullscreen"):
-            self.set_window_state("normal")
+            self.setWindowState("normal")
         target = "maximized" if state == "fullscreen" else "fullscreen"
-        self.set_window_state(target)
-        self._tv_before_minimize = target == "fullscreen"
-        return target == "fullscreen"
+        self.setWindowState(target)
+        self.tvBeforeMinimize = target == "fullscreen"
+        return self.tvBeforeMinimize
 
-    def ensure_tv_mode(self):
+    def ensureTvMode(self):
         """Enter fullscreen if Chrome isn't already. Leaves an existing
         fullscreen window alone."""
-        state = self.window_state()
-        if state == "fullscreen":
-            self._tv_before_minimize = True
-            return True
-        if state == "minimized":
-            self.set_window_state("normal")
-        self.set_window_state("fullscreen")
-        self._tv_before_minimize = True
+        state = self.windowState()
+        if state != "fullscreen":
+            if state == "minimized":
+                self.setWindowState("normal")
+            self.setWindowState("fullscreen")
+        self.tvBeforeMinimize = True
         return True
-
-
-class ChromeApp:
-    """Base for a remote that drives one website in the shared Chrome.
-
-    Subclasses set NAME / HOSTS / HOME_URL, implement _page_state() and add
-    `_do_<action>` handlers.
-    """
-
-    NAME = ""
-    HOSTS = ()
-    HOME_URL = ""
-
-    def __init__(self, session):
-        self.session = session
-
-    @property
-    def driver(self):
-        return self.session.driver
-
-    def _page_state(self):
-        raise NotImplementedError
-
-    def _state(self):
-        state = self._page_state()
-        state["app"] = self.NAME
-        state["browser"] = "running"
-        state["tvMode"] = self.session.tv_mode
-        state["windowState"] = self.session.window_state()
-        return state
-
-    def state(self):
-        """Snapshot of this app's tab. Attaches to a running Chrome but never
-        launches one or changes which tab is showing; if Chrome is showing
-        another app's tab the phone gets pageType "otherTab" and can offer to
-        switch."""
-        with self.session.locked(timeout=3):
-            try:
-                if not self.session.connect(launch=False):
-                    return {"app": self.NAME, "browser": "stopped"}
-                if not self.session.follow_visible(self.HOSTS):
-                    return {"app": self.NAME, "browser": "running", "pageType": "otherTab",
-                            "url": self.driver.current_url}
-                return self._state()
-            except WebDriverException as e:
-                self.session.teardown()
-                return {"app": self.NAME, "browser": "error", "error": str(e).splitlines()[0]}
-
-    def show(self):
-        """Switch Chrome to this app's tab (opening it if needed) and bring it
-        to the front. Called when you pick this app on the phone."""
-        with self.session.locked(timeout=15):
-            self._ensure()
-            self.session.bring_to_front()
-            return self._state()
-
-    def pause_playback(self):
-        """Pause this app if it's playing. Must not change which tab is showing."""
-        return False
-
-    def screenshot(self):
-        with self.session.locked(timeout=10):
-            try:
-                if not self.session.connect(launch=False):
-                    return None
-                return self.driver.get_screenshot_as_png()
-            except WebDriverException:
-                return None
-
-    def _ensure(self):
-        self.session.connect(launch=True)
-        self.session.use_tab(self.HOSTS, self.HOME_URL)
-
-    def run(self, action, value=None):
-        with self.session.locked(timeout=15):
-            try:
-                return self._run(action, value)
-            except TimeoutException as e:
-                # The page hung (not the session): report it, don't retry.
-                raise PageUnresponsive("The page took too long to respond.") from e
-            except WebDriverException:
-                # Session died mid-command (window closed, crash): restart once.
-                self.session.teardown()
-                return self._run(action, value)
-
-    def _run(self, action, value):
-        self._ensure()
-        handler = getattr(self, f"_do_{action}", None)
-        if handler is None:
-            raise ValueError(f"Unknown {self.NAME} action '{action}'")
-        result = handler(value) if value is not None else handler()
-        time.sleep(0.05)
-        return {"result": result, "state": self._state()}
-
-    # Actions every web app shares.
-
-    def _do_focus(self):
-        """Bring this app's tab and Chrome in front of whatever else is open."""
-        return {"foreground": self.session.bring_to_front()}
-
-    def _do_tvMode(self):
-        return self.session.toggle_tv_mode()
-
-    def _do_reload(self):
-        self.driver.refresh()
-        return "reload"

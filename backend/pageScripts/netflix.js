@@ -411,20 +411,6 @@
       return true;
     },
 
-    pause() {
-      const p = nfPlayer();
-      if (p && !p.isPaused()) {
-        p.pause();
-        return true;
-      }
-      const v = video();
-      if (v && !v.paused) {
-        v.pause();
-        return true;
-      }
-      return false;
-    },
-
     seek(seconds) {
       const p = nfPlayer();
       if (!p) return false;
