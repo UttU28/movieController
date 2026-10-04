@@ -2,17 +2,23 @@
 
 import { useEffect, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faUpRightAndDownLeftFromCenter } from "@fortawesome/free-solid-svg-icons";
+import { faPowerOff, faUpRightAndDownLeftFromCenter } from "@fortawesome/free-solid-svg-icons";
+import AppSwitcher from "./AppSwitcher";
 import LaptopPanel, { TrackpadStatus } from "../panels/LaptopPanel";
+import RemoteExtras from "./RemoteExtras";
 import { buzz } from "./RemoteButton";
 
 const CLOSE_DISTANCE = 110; // px pulled down that closes it
 const CLOSE_SPEED = 0.6; // px/ms: a quick flick closes it too
 const ANIM_MS = 260;
 
-// Laptop controls in a sheet that slides up from the bottom. Drag its top bar
-// down (it follows your finger) to put it away; "More" opens the full page.
-export default function LaptopDrawer({ onClose, onMore, closeSignal = 0 }) {
+// The hub: a sheet that slides up from the bottom with the app tabs on top.
+// Full remote: the laptop drawer controls below them. Simple remote: the
+// media buttons the main screen doesn't show, plus quick keys/shortcuts
+// (its trackpad is on the main screen). Drag the top bar down to dismiss;
+// "More" opens the full laptop page in both styles.
+export default function LaptopDrawer({ app, style, onChoose, onPowerOff, onClose, onMore, closeSignal = 0 }) {
+  const simple = style === "simple";
   const [shown, setShown] = useState(false);
   const [padStatus, setPadStatus] = useState("connecting");
   const [pull, setPull] = useState(0);
@@ -93,8 +99,8 @@ export default function LaptopDrawer({ onClose, onMore, closeSignal = 0 }) {
         >
           <span className="grip" aria-hidden="true" />
           <div className="drawer-title">
-            <span>Laptop</span>
-            <TrackpadStatus status={padStatus} />
+            <span>{simple ? "Remote" : "Laptop"}</span>
+            {!simple && <TrackpadStatus status={padStatus} />}
           </div>
           <button
             type="button"
@@ -108,7 +114,27 @@ export default function LaptopDrawer({ onClose, onMore, closeSignal = 0 }) {
           </button>
         </header>
         <div className="drawer-body">
-          <LaptopPanel variant="drawer" onStatus={setPadStatus} />
+          <div className="hub-switcher">
+            <AppSwitcher
+              app={app}
+              onChange={(next) => {
+                onChoose(next);
+                close();
+              }}
+            />
+            <button
+              type="button"
+              className="hub-power"
+              aria-label="Turn the remote off"
+              onClick={() => {
+                buzz();
+                onPowerOff();
+              }}
+            >
+              <FontAwesomeIcon icon={faPowerOff} />
+            </button>
+          </div>
+          {simple ? <RemoteExtras app={app} /> : <LaptopPanel variant="drawer" onStatus={setPadStatus} />}
         </div>
       </section>
     </div>

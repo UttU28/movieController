@@ -1,6 +1,6 @@
 "use client";
 
-import { faFilm, faTvAlt } from "@fortawesome/free-solid-svg-icons";
+import { SECTIONS } from "../lib/appMeta";
 import StreamingPanel from "./StreamingPanel";
 
 const PAGE_LABELS = {
@@ -13,11 +13,6 @@ const PAGE_LABELS = {
   player: "Watching",
 };
 
-const SECTIONS = [
-  { value: "shows", label: "Shows", icon: faTvAlt },
-  { value: "movies", label: "Movies", icon: faFilm },
-];
-
 export default function NetflixPanel() {
-  return <StreamingPanel app="netflix" appName="Netflix" audioLabel="NF" pageLabels={PAGE_LABELS} sections={SECTIONS} />;
+  return <StreamingPanel app="netflix" appName="Netflix" audioLabel="NF" pageLabels={PAGE_LABELS} sections={SECTIONS.netflix} />;
 }

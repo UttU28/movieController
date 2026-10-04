@@ -28,6 +28,7 @@ import Sheet, { SheetToggle } from "../components/Sheet";
 import SkipNotice from "../components/SkipNotice";
 import SwipePad from "../components/SwipePad";
 import TitleBar from "../components/TitleBar";
+import { useAppRemote } from "../lib/RemoteAppContext";
 import useKeyboardRemote from "../lib/useKeyboardRemote";
 import useRemote from "../lib/useRemote";
 
@@ -90,7 +91,7 @@ function describe(state) {
 }
 
 export default function YouTubePanel() {
-  const { state, connected, error, action, search, show } = useRemote("youtube");
+  const { state, connected, error, action, search, show } = useAppRemote();
   const pc = useRemote("laptop", { poll: false });
   const [resultsOpen, setResultsOpen] = useState(false);
   const [upNextOpen, setUpNextOpen] = useState(false);

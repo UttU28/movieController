@@ -32,6 +32,7 @@ import SkipNotice from "../components/SkipNotice";
 import SwipePad from "../components/SwipePad";
 import TitleBar from "../components/TitleBar";
 import { sendAction } from "../lib/api";
+import { useAppRemote } from "../lib/RemoteAppContext";
 import useJellyfinLibrary from "../lib/useJellyfinLibrary";
 import useKeyboardRemote from "../lib/useKeyboardRemote";
 import useRemote from "../lib/useRemote";
@@ -120,7 +121,7 @@ function TrackChips({ label, tracks, current, onPick, withOff }) {
 }
 
 export default function JellyfinPanel() {
-  const { state, connected, error, action, show } = useRemote("jellyfin");
+  const { state, connected, error, action, show } = useAppRemote();
   const pc = useRemote("laptop", { poll: false });
   const library = useJellyfinLibrary();
   const [view, setView] = useState("remote");

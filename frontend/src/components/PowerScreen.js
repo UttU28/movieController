@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowUpRightFromSquare, faCheck, faChevronDown, faChevronUp, faCompress, faExpand, faImages, faPalette, faPlus, faPowerOff, faRotate, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faArrowUpRightFromSquare, faCheck, faChevronDown, faChevronUp, faCirclePlay, faCompress, faExpand, faFlask, faImages, faMoon, faPalette, faPlus, faPowerOff, faRotate, faSliders, faSun, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { addWallpaper, errorMessage, getWallpapers, reloadQr, removeWallpaper, selectWallpaper } from "../lib/api";
 import { MarqueeTitle } from "./NowShowing";
 import { buzz } from "./RemoteButton";
@@ -20,18 +20,19 @@ const THEMES = [
   { id: "live", label: "Live mode", desc: "Wallpaper, clock and QR at full brightness" },
 ];
 
-function useWallpapers() {
+function useWallpapers(dev) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [adding, setAdding] = useState(false);
 
   const load = useCallback(async () => {
+    if (dev) return; // developer mode: the library stays unloaded
     try {
       setData(await getWallpapers());
     } catch (err) {
       setError(errorMessage(err));
     }
-  }, []);
+  }, [dev]);
 
   useEffect(() => {
     load();
@@ -39,6 +40,7 @@ function useWallpapers() {
 
   const run = async (fn) => {
     setError("");
+    if (dev) return false; // developer mode: wallpaper edits are local no-ops
     try {
       setData(await fn());
       return true;
@@ -86,9 +88,9 @@ function ToolButton({ icon, label, active = false, disabled = false, spin = fals
   );
 }
 
-export default function PowerScreen({ mode, tvMode, busy, pcOn, lastApp, nowPlaying, onPowerOn, onTheme, onFullscreen }) {
+export default function PowerScreen({ mode, tvMode, busy, pcOn, lastApp, nowPlaying, dev, style, onPowerOn, onDev, onTheme, onStyle, onFullscreen }) {
   const appName = APP_NAMES[lastApp];
-  const papers = useWallpapers();
+  const papers = useWallpapers(dev);
   const [link, setLink] = useState("");
   const [reloading, setReloading] = useState(false);
   const [themesOpen, setThemesOpen] = useState(false);
@@ -283,13 +285,51 @@ export default function PowerScreen({ mode, tvMode, busy, pcOn, lastApp, nowPlay
         )}
       </div>
 
-      <div className="row three">
+      {/* The two Home screen modes, one tap each, out in the open. */}
+      <div className="row two power-modes" role="radiogroup" aria-label="Home screen theme">
+        <ToolButton
+          icon={faMoon}
+          label="Dark"
+          active={mode === "night"}
+          pressed={mode === "night"}
+          onPress={() => mode !== "night" && onTheme("night")}
+        />
+        <ToolButton
+          icon={faSun}
+          label="Live"
+          active={mode === "live"}
+          pressed={mode === "live"}
+          onPress={() => mode !== "live" && onTheme("live")}
+        />
+      </div>
+
+      {/* Which remote you get when you turn it on: the full one, or the
+          minimal one that lives in the bubble for the extras. */}
+      <div className="row two power-modes" role="radiogroup" aria-label="Remote style">
+        <ToolButton
+          icon={faSliders}
+          label="Full"
+          active={style !== "simple"}
+          pressed={style !== "simple"}
+          onPress={() => style !== "full" && onStyle("full")}
+        />
+        <ToolButton
+          icon={faCirclePlay}
+          label="Simple"
+          active={style === "simple"}
+          pressed={style === "simple"}
+          onPress={() => style !== "simple" && onStyle("simple")}
+        />
+      </div>
+
+      <div className="row four">
         <ToolButton
           icon={faRotate}
           label="Reload"
           spin={reloading}
           disabled={reloading}
           onPress={async () => {
+            if (dev) return; // developer mode: there's no Home screen to reload
             setReloading(true);
             try {
               await reloadQr();
@@ -313,6 +353,13 @@ export default function PowerScreen({ mode, tvMode, busy, pcOn, lastApp, nowPlay
           active={!!tvMode}
           pressed={!!tvMode}
           onPress={onFullscreen}
+        />
+        <ToolButton
+          icon={faFlask}
+          label="Dev"
+          active={dev}
+          pressed={!!dev}
+          onPress={onDev}
         />
       </div>
 

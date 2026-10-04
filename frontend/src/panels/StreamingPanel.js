@@ -27,6 +27,7 @@ import SkipNotice from "../components/SkipNotice";
 import SwipePad from "../components/SwipePad";
 import TitleBar from "../components/TitleBar";
 import TitleDetail from "../components/TitleDetail";
+import { useAppRemote } from "../lib/RemoteAppContext";
 import useKeyboardRemote from "../lib/useKeyboardRemote";
 import useRemote from "../lib/useRemote";
 
@@ -77,7 +78,9 @@ function describe(state, pageLabels, appName, notices) {
 // two shortcut buttons in the navigation row, e.g. Movies and TV shows.
 // `notices` replace the title bar on pages that need a word of explanation.
 export default function StreamingPanel({ app, appName, audioLabel, pageLabels, sections, notices }) {
-  const { state, connected, error, action, search, show } = useRemote(app);
+  // The app's remote lives at the page level (shared with the header preview
+  // and the bubble); the laptop sender is a private one-shot queue.
+  const { state, connected, error, action, search, show } = useAppRemote();
   const pc = useRemote("laptop", { poll: false });
   const [detailOpen, setDetailOpen] = useState(false);
   useKeyboardRemote(action, KEYS);

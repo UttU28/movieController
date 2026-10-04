@@ -326,6 +326,9 @@ button {
   display: grid;
   gap: 10px;
 }
+.row.two {
+  grid-template-columns: repeat(2, 1fr);
+}
 .row.three {
   grid-template-columns: repeat(3, 1fr);
 }
@@ -654,6 +657,26 @@ button {
   display: flex;
   gap: 8px;
   height: 250px;
+}
+.pad-wrap-dot {
+  position: relative;
+}
+.pad-dot {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  pointer-events: none;
+}
+.pad-dot .dot {
+  width: 9px;
+  height: 9px;
+  box-shadow: 0 0 6px currentColor;
+}
+.pad-dot.ok {
+  color: var(--green);
+}
+.pad-dot.bad {
+  color: #ffb020;
 }
 .trackpad {
   flex: 1;
@@ -1757,7 +1780,9 @@ html:has(.power-layout) body::-webkit-scrollbar {
 .power-chrome-bottom .dock {
   margin: 0;
 }
-.power-layout.themes-open > .row {
+/* Only the tools row sticks while the Home screen editor is open; the
+   quick Dark/Live row scrolls away with the rest. */
+.power-layout.themes-open > .row.four {
   position: sticky;
   bottom: 0;
   z-index: 4;
@@ -2419,3 +2444,57 @@ html:has(.power-layout) body::-webkit-scrollbar {
     animation: none;
   }
 }
+
+/* ---------- Bubble hub ---------- */
+.hub-switcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 -2px 12px;
+}
+.hub-switcher .switcher {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+/* Power off, in the bubble with the apps. */
+.hub-power {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #ff5a5f, #c81d25);
+  color: #fff;
+  font-size: 1.05rem;
+}
+.hub-power:active {
+  filter: brightness(1.15);
+  transform: scale(0.94);
+}
+
+/* What's next, in one tap (simple remote). */
+.next-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+}
+.next-row .eyebrow {
+  flex: none;
+}
+.next-row .next-chip {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+.next-row .next-chip > :last-child {
+  flex: 1;
+  min-width: 0;
+}
+

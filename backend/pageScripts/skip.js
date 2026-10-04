@@ -1,4 +1,4 @@
-// Run in an app tab by auto_skip.py: finds a Skip button the site is showing
+// Run in an app tab by autoSkip.py: finds a Skip button the site is showing
 // right now (ad, intro, recap, credits...) and says where to click it.
 // Returns null, or {key, label, kind, x, y, visible}: where to click, in
 // viewport pixels, and whether the page is on screen (Chrome holds back real
@@ -7,8 +7,8 @@
 //
 // Ads played through Google's IMA player (Viki) have no Skip button we can
 // reach (it lives in a cross-site frame), so for those it returns
-// {key, label, kind: 'ad', jump: true}: auto_skip runs the ad to its end
-// (JUMP_JS in auto_skip.py), and the player carries on with the show.
+// {key, label, kind: 'ad', jump: true}: autoSkip runs the ad to its end
+// (JUMP_JS in autoSkip.py), and the player carries on with the show.
 (() => {
   const clean = (t) => (t || '').replace(/\s+/g, ' ').trim();
 

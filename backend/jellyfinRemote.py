@@ -2,27 +2,26 @@
 
 Unlike the other apps, Jellyfin has a proper remote-control protocol: the
 web tab is a Jellyfin "session" that obeys commands (MoveUp, Select, Back,
-Pause, Seek, SetSubtitleStreamIndex, DisplayContent, ...). jellyfin.js sends
-those through the tab's own logged-in ApiClient and also reads the library for
-the phone. It runs over the tab's DevTools socket, so everything works with
-the Jellyfin tab in the background; the WebDriver is only needed for bringing
-the tab forward and for fullscreen.
+Pause, Seek, SetSubtitleStreamIndex, DisplayContent, ...).
+pageScripts/jellyfin.js sends those through the tab's own logged-in
+ApiClient and also reads the library for the phone. It runs over the tab's
+DevTools socket, so everything works with the Jellyfin tab in the background;
+the WebDriver is only needed for bringing the tab forward and for fullscreen.
 """
 
 import json
 import os
 import time
-from pathlib import Path
 from urllib.parse import urlparse
 
 from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 
-from chrome_session import Busy, ChromeApp, PageUnresponsive
+from chromeApp import ChromeApp
+from chromeSession import Busy, PageUnresponsive, pageScript
 
-BASE_DIR = Path(__file__).resolve().parent
-JELLYFIN_JS = (BASE_DIR / "jellyfin.js").read_text(encoding="utf-8")
+JELLYFIN_JS = pageScript("jellyfin.js")
 JELLYFIN_URL = os.getenv("JELLYFIN_URL", "https://streaming.thatinsaneguy.com").rstrip("/")
 
 SEEK_SECONDS = 10
@@ -54,6 +53,11 @@ PLAYSTATE = {
     "previous": "PreviousTrack",
 }
 
+# Actions that need the WebDriver (and its lock). Playing needs the tab in
+# front: Chrome throttles background tabs so hard that the web player can't
+# start there.
+DRIVER_ACTIONS = ("focus", "tvMode", "fullscreen", "reload", "play", "show")
+
 
 class JellyfinRemote(ChromeApp):
     NAME = "jellyfin"
@@ -62,25 +66,28 @@ class JellyfinRemote(ChromeApp):
 
     # ------------------------------------------------------------------ helpers
 
-    def _tab(self):
-        return self.session.find_tab(self.HOSTS)
+    def tab(self):
+        return self.session.findTab(self.HOSTS)
 
-    def _js(self, fn, *args):
-        tab = self._tab()
+    def js(self, fn, *args):
+        tab = self.tab()
         if tab is None:
             raise ValueError("Jellyfin isn't open in Chrome")
         call = f"window.__jfr.{fn}({', '.join(json.dumps(a) for a in args)})"
-        return self.session.eval_in_tab(tab, f"(async () => {{ {JELLYFIN_JS}\n return await {call}; }})()")
+        return self.session.evalInTab(tab, f"(async () => {{ {JELLYFIN_JS}\n return await {call}; }})()")
 
-    def _page_state(self):
-        return self._js("state")
+    def pageState(self):
+        return self.js("state")
 
-    def _state(self):
-        state = self._page_state()
+    def fullState(self):
+        state = self.pageState()
         state["app"] = self.NAME
         state["browser"] = "running"
-        state["tvMode"] = self.session.tv_mode if self.driver else False
+        state["tvMode"] = self.session.tvMode if self.driver else False
         return state
+
+    def playerOpen(self):
+        return self.page() == "player"
 
     # ------------------------------------------------------------------ public
 
@@ -91,156 +98,138 @@ class JellyfinRemote(ChromeApp):
             with self.session.locked(timeout=3):
                 if not self.session.connect(launch=False):
                     return {"app": self.NAME, "browser": "stopped"}
-            if self._tab() is None:
+            if self.tab() is None:
                 return {"app": self.NAME, "browser": "running", "pageType": "noTab"}
-            return self._state()
+            return self.fullState()
         except (WebDriverException, RuntimeError, OSError) as e:
             return {"app": self.NAME, "browser": "error", "error": str(e).splitlines()[0]}
 
     def run(self, action, value=None):
-        # Only some actions need the WebDriver (and its lock).
-        # Playing needs the tab in front: Chrome throttles background tabs so
-        # hard that the web player can't start there.
-        needs_driver = action in ("focus", "tvMode", "fullscreen", "reload", "play", "show")
         try:
-            if self._tab() is None:
+            if self.tab() is None:
                 with self.session.locked(timeout=15):
-                    self._ensure()
-                self._wait_until_ready()
-            if needs_driver:
+                    self.ensureTab()
+                self.waitUntilReady()
+            if action in DRIVER_ACTIONS:
                 with self.session.locked(timeout=15):
-                    self._ensure()
-                    return self._run_action(action, value)
-            return self._run_action(action, value)
+                    self.ensureTab()
+                    return self.runAction(action, value)
+            return self.runAction(action, value)
         except (Busy, PageUnresponsive):
             raise
         except RuntimeError as e:
             # Errors from the page script (e.g. Jellyfin rejecting a command).
             raise ValueError(str(e))
 
-    def _wait_until_ready(self, timeout=15):
+    def waitUntilReady(self, timeout=15):
         """A freshly opened tab needs a moment before its ApiClient exists."""
         end = time.time() + timeout
         while time.time() < end:
             try:
-                if self._js("state").get("pageType") not in (None, "login"):
+                if self.js("state").get("pageType") not in (None, "login"):
                     return
             except (RuntimeError, OSError, ValueError):
                 pass
             time.sleep(0.5)
 
-    def _run_action(self, action, value):
-        handler = getattr(self, f"_do_{action}", None)
-        if action in COMMANDS and handler is None:
-            result = self._command(action)
-        elif action in PLAYSTATE and handler is None:
-            result = self._js("playstate", PLAYSTATE[action])
-        elif handler is not None:
+    def runAction(self, action, value):
+        handler = self.handlerFor(action)
+        if handler is not None:
             result = handler(value) if value is not None else handler()
+        elif action in COMMANDS:
+            result = self.command(action)
+        elif action in PLAYSTATE:
+            result = self.js("playstate", PLAYSTATE[action])
         else:
             raise ValueError(f"Unknown jellyfin action '{action}'")
         time.sleep(0.15)
-        return {"result": result, "state": self._state()}
+        return {"result": result, "state": self.fullState()}
 
-    def _command(self, action):
-        # In the player the D-pad works like a TV: seek and volume, OK pauses.
-        if action in ("left", "right", "select") and self._player_open():
+    def command(self, action):
+        if action in ("up", "down", "left", "right", "select") and self.playerOpen():
+            # In the player the D-pad works like a TV: seek and volume, OK pauses.
             if action == "select":
-                return self._js("playstate", "PlayPause")
-            return self._js("seekBy", SEEK_SECONDS if action == "right" else -SEEK_SECONDS)
-        if action in ("up", "down") and self._player_open():
-            return self._js("command", "VolumeUp" if action == "up" else "VolumeDown")
+                return self.js("playstate", "PlayPause")
+            if action in ("up", "down"):
+                return self.js("command", "VolumeUp" if action == "up" else "VolumeDown")
+            return self.js("seekBy", SEEK_SECONDS if action == "right" else -SEEK_SECONDS)
         # Everywhere else the D-pad moves our own highlight one whole item
         # at a time (Jellyfin's Move commands stop on every part of a card).
-        if action in ("up", "down", "left", "right"):
-            return self._js("move", action)
         if action == "select":
-            return self._js("select")
-        return self._js("command", COMMANDS[action])
+            return self.js("select")
+        if action in ("up", "down", "left", "right"):
+            return self.js("move", action)
+        return self.js("command", COMMANDS[action])
 
-    def _player_open(self):
-        state = self._js("state")
-        return state.get("pageType") == "player"
-
-    def pause_playback(self):
-        if self._tab() is None:
-            return False
-        try:
-            player = (self._js("state") or {}).get("player") or {}
-            if not player or player.get("paused"):
-                return False
-            self._js("playstate", "Pause")
-            return True
-        except Exception as e:
-            print(f"jellyfin pause failed: {e}")
-            return False
+    def move(self, direction):
+        return self.command(direction)
 
     # ------------------------------------------------------------------ actions
 
-    def _do_seekBack(self):
-        return self._js("seekBy", -SEEK_SECONDS)
+    def _doSeekBack(self):
+        return self.js("seekBy", -SEEK_SECONDS)
 
-    def _do_seekForward(self):
-        return self._js("seekBy", SEEK_SECONDS)
+    def _doSeekForward(self):
+        return self.js("seekBy", SEEK_SECONDS)
 
-    def _do_seekTo(self, fraction=None):
-        return self._js("seekTo", float(fraction))
+    def _doSeekTo(self, fraction=None):
+        return self.js("seekTo", float(fraction))
 
-    def _do_skip(self):
+    def _doSkip(self):
         """Skip Intro / other media segments, when Jellyfin offers it."""
-        return self._js("skip")
+        return self.js("skip")
 
-    def _do_subtitle(self, index=None):
-        return self._js("command", "SetSubtitleStreamIndex", {"Index": str(int(index))})
+    def _doSubtitle(self, index=None):
+        return self.js("command", "SetSubtitleStreamIndex", {"Index": str(int(index))})
 
-    def _do_audio(self, index=None):
-        return self._js("command", "SetAudioStreamIndex", {"Index": str(int(index))})
+    def _doAudio(self, index=None):
+        return self.js("command", "SetAudioStreamIndex", {"Index": str(int(index))})
 
-    def _do_play(self, value=None):
+    def _doPlay(self, value=None):
         """Play an item on the TV. value: {"id": ..., "fromStart": bool}."""
         value = value or {}
-        self.session.bring_to_front()
-        result = self._js("play", value["id"], bool(value.get("fromStart")))
-        self._js("forgetDetail")
+        self.session.bringToFront()
+        result = self.js("play", value["id"], bool(value.get("fromStart")))
+        self.js("forgetDetail")
         return result
 
-    def _do_season(self, season_id=None):
+    def _doSeason(self, seasonId=None):
         """Show another season's episodes on the phone (the TV stays put)."""
-        if not season_id:
+        if not seasonId:
             raise ValueError("No season given")
-        return self._js("pickSeason", str(season_id))
+        return self.js("pickSeason", str(seasonId))
 
-    def _do_show(self, item_id=None):
+    def _doShow(self, itemId=None):
         """Open an item's page on the TV."""
-        self.session.bring_to_front()
-        return self._js("display", item_id)
+        self.session.bringToFront()
+        return self.js("display", itemId)
 
-    def _do_search(self, query=None):
+    def _doSearch(self, query=None):
         query = (query or "").strip()
         if not query:
             raise ValueError("Empty search query")
-        return self._js("search", query)
+        return self.js("search", query)
 
-    def _do_layout(self, layout=None):
+    def _doLayout(self, layout=None):
         if layout not in ("tv", "desktop"):
             raise ValueError("Layout must be tv or desktop")
-        return self._js("setLayout", layout)
+        return self.js("setLayout", layout)
 
     # Library for the phone.
 
-    def _do_library(self):
-        return self._js("home")
+    def _doLibrary(self):
+        return self.js("home")
 
-    def _do_browse(self, value=None):
+    def _doBrowse(self, value=None):
         value = value or {}
-        return self._js("browse", value["id"], int(value.get("start", 0)))
+        return self.js("browse", value["id"], int(value.get("start", 0)))
 
-    def _do_item(self, item_id=None):
-        return self._js("item", item_id)
+    def _doItem(self, itemId=None):
+        return self.js("item", itemId)
 
     # Browser-level actions (these use the WebDriver on the Jellyfin tab).
 
-    def _do_fullscreen(self):
+    def _doFullscreen(self):
         if self.driver.execute_script("return !!document.fullscreenElement"):
             self.driver.execute_script("document.exitFullscreen()")
             return "exitFullscreen"

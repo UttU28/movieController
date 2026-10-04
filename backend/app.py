@@ -1,5 +1,4 @@
 import asyncio
-from pathlib import Path
 import json
 import os
 import threading
@@ -9,38 +8,59 @@ from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse
 from selenium.common.exceptions import WebDriverException
 
 load_dotenv()
 
-from auto_skip import AutoSkip
-from chrome_session import Busy, ChromeSession, PageUnresponsive, chrome_running, dismiss_restore_bubble
-from cursor_warden import CursorWarden
-from jellyfin_remote import JellyfinRemote
-from laptop import LaptopControl
-from netflix_remote import NetflixRemote
-import qr_page
+# The modules below read their settings from .env when imported.
+import qrPage
 import wallpapers
-from prime_remote import PrimeRemote
-from tab_keeper import TabKeeper
-from tab_park import TabPark
-from viki_remote import VikiRemote
-from youtube_remote import YouTubeRemote
+from autoSkip import AutoSkip
+from chromeSession import Busy, ChromeSession, PageUnresponsive, chromeRunning, dismissRestoreBubble
+from cursorWarden import CursorWarden
+from dataFiles import dataFile, readText, writeText
+from jellyfinRemote import JellyfinRemote
+from laptop import LaptopControl
+from netflixRemote import NetflixRemote
+from primeRemote import PrimeRemote
+from sleepWatch import SleepWatch
+from tabKeeper import TabKeeper
+from tabPark import TabPark
+from vikiRemote import VikiRemote
+from youtubeRemote import YouTubeRemote
+
+
+def envFlag(name, default):
+    return os.getenv(name, default).lower() in ("1", "true", "yes")
+
 
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "9282"))
-RELOAD = os.getenv("RELOAD", "false").lower() in ("1", "true", "yes")
-LAUNCH_ON_START = os.getenv("LAUNCH_ON_START", "true").lower() in ("1", "true", "yes")
-AUTO_SKIP = os.getenv("AUTO_SKIP", "true").lower() in ("1", "true", "yes")
-CORS_ORIGINS = [
-    origin.strip()
-    for origin in os.getenv("CORS_ORIGINS", "*").split(",")
-    if origin.strip()
-]
+RELOAD = envFlag("RELOAD", "false")
+LAUNCH_ON_START = envFlag("LAUNCH_ON_START", "true")
+AUTO_SKIP = envFlag("AUTO_SKIP", "true")
+IDLE_SLEEP = envFlag("IDLE_SLEEP", "true")
+IDLE_SLEEP_MINUTES = float(os.getenv("IDLE_SLEEP_MINUTES", "10") or 10)
+CORS_ORIGINS = [origin.strip() for origin in os.getenv("CORS_ORIGINS", "*").split(",") if origin.strip()]
 
-session = ChromeSession()
+QR_URL = f"http://127.0.0.1:{PORT}/qr"
+QR_MARKER = f":{PORT}/qr"
+FRONTEND_CHECK_URL = f"http://127.0.0.1:{qrPage.FRONTEND_PORT}/"
+
+MODES = qrPage.MODES
+APPS = ("youtube", "prime", "netflix", "viki", "jellyfin")
+
+# The theme, last app, last title and power survive restarts. Power is only
+# put back when Chrome kept running through the restart (an update): the
+# remote carries on exactly where it was. A fresh Chrome starts "off", on the
+# Home screen.
+LAST_APP_FILE = dataFile("lastApp.txt", "last_app.txt")
+LAST_TITLE_FILE = dataFile("lastTitle.txt", "last_title.txt")
+POWER_FILE = dataFile("power.txt")
+THEME_FILE = dataFile("qrTheme.txt", "qr_theme.txt")
+
 # Power + QR-page theme, shared by every phone and the QR page itself.
 # power: "on" = phone shows the controls; "off" = the app tabs are parked
 #        (memory freed, places remembered), Chrome on the QR page, phone
@@ -48,38 +68,19 @@ session = ChromeSession()
 # mode:  QR page theme when idle: "night" (dark), "live".
 # lastApp: the app last used. The single source of truth for every phone:
 #        turning the remote on opens this app on the phone and its tab in Chrome.
-MODE_STATE: dict = {"power": "off", "mode": "night", "lastApp": "youtube"}
-MODES = ("night", "live")
-APPS = ("youtube", "prime", "netflix", "viki", "jellyfin")
-# The theme, last app, last title and power survive restarts. Power is only
-# put back when Chrome kept running through the restart (an update): the
-# remote carries on exactly where it was. A fresh Chrome starts "off", on the
-# Home screen.
-LAST_APP_FILE = Path(__file__).resolve().parent / "last_app.txt"
-POWER_FILE = LAST_APP_FILE.with_name("power.txt")
-LAST_TITLE_FILE = LAST_APP_FILE.with_name("last_title.txt")
-try:
-    _saved_app = LAST_APP_FILE.read_text(encoding="utf-8").strip()
-    if _saved_app in APPS:
-        MODE_STATE["lastApp"] = _saved_app
-except OSError:
-    pass
-try:
-    _saved_title = LAST_TITLE_FILE.read_text(encoding="utf-8").strip()
-    if _saved_title:
-        MODE_STATE["nowPlaying"] = _saved_title
-except OSError:
-    pass
-THEME_FILE = Path(__file__).resolve().parent / "qr_theme.txt"
-try:
-    _saved_theme = THEME_FILE.read_text(encoding="utf-8").strip()
-    if _saved_theme in MODES:
-        MODE_STATE["mode"] = _saved_theme
-    # (An old "day" setting falls back to the default, night.)
-except OSError:
-    pass
+# nowPlaying: the last title playing in lastApp.
+savedApp = readText(LAST_APP_FILE)
+savedTheme = readText(THEME_FILE)  # (an old "day" setting falls back to night)
+modeState = {
+    "power": "off",
+    "mode": savedTheme if savedTheme in MODES else "night",
+    "lastApp": savedApp if savedApp in APPS else "youtube",
+}
+if readText(LAST_TITLE_FILE):
+    modeState["nowPlaying"] = readText(LAST_TITLE_FILE)
 
-web_apps = {
+session = ChromeSession()
+webApps = {
     "youtube": YouTubeRemote(session),
     "prime": PrimeRemote(session),
     "netflix": NetflixRemote(session),
@@ -90,12 +91,12 @@ laptop = LaptopControl()
 
 # The remote's Chrome tabs, in the order they're kept: (name, home URL, URL marker).
 keeper = TabKeeper(session, [
-    ("youtube", web_apps["youtube"].HOME_URL, "youtube.com"),
-    ("prime", web_apps["prime"].HOME_URL, "primevideo.com"),
-    ("netflix", web_apps["netflix"].HOME_URL, "netflix.com"),
-    ("jellyfin", web_apps["jellyfin"].HOME_URL, web_apps["jellyfin"].HOSTS[0]),
-    ("viki", web_apps["viki"].HOME_URL, "viki.com"),
-    ("qr", f"http://127.0.0.1:{PORT}/qr", f":{PORT}/qr"),
+    ("youtube", webApps["youtube"].HOME_URL, "youtube.com"),
+    ("prime", webApps["prime"].HOME_URL, "primevideo.com"),
+    ("netflix", webApps["netflix"].HOME_URL, "netflix.com"),
+    ("jellyfin", webApps["jellyfin"].HOME_URL, webApps["jellyfin"].HOSTS[0]),
+    ("viki", webApps["viki"].HOME_URL, "viki.com"),
+    ("qr", QR_URL, QR_MARKER),
 ])
 # Powers tabs down to about:blank when they're not in use (power off, or
 # another app is showing), remembering where to put them back.
@@ -105,67 +106,59 @@ park = TabPark(session, keeper)
 warden = CursorWarden(session, keeper)
 # Clicks Skip (ads, intros, recaps...) as soon as a site offers it.
 skipper = AutoSkip(session, keeper, enabled=AUTO_SKIP)
+# Powers the remote off after IDLE_SLEEP_MINUTES with nothing playing and
+# no command from any phone (see sleepWatch.py).
+lastActivity = {"at": time.time()}
+sleeper = SleepWatch(session, lastActivity, modeState, lambda: applyPower(False),
+                    minutes=IDLE_SLEEP_MINUTES, enabled=IDLE_SLEEP)
+beats = (keeper, warden, skipper, sleeper)
+
+stopBubbleWatch = threading.Event()
 
 
-_stop_bubbles = threading.Event()
+def noteActivity():
+    """Called by every command the phone sends. The status polls are not
+    activity: the phone polls all the time, that's not you using it."""
+    lastActivity["at"] = time.time()
 
 
-def _watch_restore_bubble():
+def watchRestoreBubble():
     """The restore bubble can appear any time Chrome decides the last exit
     was a crash. Look for it every so often and close it."""
-    while not _stop_bubbles.wait(20):
-        dismiss_restore_bubble()
+    while not stopBubbleWatch.wait(20):
+        dismissRestoreBubble()
 
 
 @asynccontextmanager
-async def lifespan(app):
-    if chrome_running():
-        MODE_STATE["power"] = _saved_power()
+async def lifespan(_app):
+    if chromeRunning():
+        modeState["power"] = "on" if readText(POWER_FILE) == "on" else "off"
     if LAUNCH_ON_START:
-        threading.Thread(target=_safe_connect, daemon=True).start()
-    threading.Thread(target=_watch_restore_bubble, daemon=True).start()
-    keeper.start()
-    warden.start()
-    skipper.start()
+        threading.Thread(target=startChrome, daemon=True).start()
+    threading.Thread(target=watchRestoreBubble, daemon=True).start()
+    for beat in beats:
+        beat.start()
     yield
-    _stop_bubbles.set()
-    keeper.stop()
-    warden.stop()
-    skipper.stop()
+    stopBubbleWatch.set()
+    for beat in beats:
+        beat.stop()
     with session.lock:
         session.teardown()
 
 
-def _wait_for_qr(timeout=20):
-    url = f"http://127.0.0.1:{PORT}/qr"
+def waitForQr(timeout=20):
     end = time.time() + timeout
     while time.time() < end:
         try:
-            urllib.request.urlopen(url, timeout=1)
+            urllib.request.urlopen(QR_URL, timeout=1)
             return True
         except OSError:
             time.sleep(0.25)
     return False
 
 
-def _saved_power():
-    try:
-        return "on" if POWER_FILE.read_text(encoding="utf-8").strip() == "on" else "off"
-    except OSError:
-        return "off"
-
-
-def _save_power(power):
-    try:
-        POWER_FILE.write_text(power, encoding="utf-8")
-    except OSError:
-        pass
-
-
-def _safe_connect():
-    qr_url = f"http://127.0.0.1:{PORT}/qr"
-    qr_marker = f":{PORT}/qr"
-    if chrome_running():
+def startChrome():
+    if chromeRunning():
         # The backend restarted under a running Chrome (e.g. an update): just
         # re-attach. Whatever is on screen, playing or paused, stays as it is,
         # and the phones keep the power state they had.
@@ -175,28 +168,28 @@ def _safe_connect():
                 keeper.check()
         except Exception as e:
             print(f"Re-attaching to Chrome failed: {e}")
-        print(f"Re-attached to the running Chrome (remote is {MODE_STATE['power']}).")
-        print(f"Phone remote: {qr_page.remote_url()}  (QR code at {qr_url})")
+        print(f"Re-attached to the running Chrome (remote is {modeState['power']}).")
+        print(f"Phone remote: {qrPage.remoteUrl()}  (QR code at {QR_URL})")
         return
-    _save_power("off")
+    writeText(POWER_FILE, "off")
     try:
-        _wait_for_qr()
+        waitForQr()
         with session.lock:
             session.connect(launch=True)
             keeper.check()
-            session.use_tab((qr_marker,), qr_url)
-            session.bring_to_front()
+            session.useTab((QR_MARKER,), QR_URL)
+            session.bringToFront()
             # A window that just opened sometimes ignores the first fullscreen.
-            session.ensure_tv_mode()
-            if session.window_state() != "fullscreen":
+            session.ensureTvMode()
+            if session.windowState() != "fullscreen":
                 time.sleep(0.4)
-                session.set_window_state("normal")
-                session.ensure_tv_mode()
+                session.setWindowState("normal")
+                session.ensureTvMode()
     except Exception as e:
         print(f"Chrome launch failed: {e}")
     # Off the Chrome lock: close the "Restore pages?" bubble if a crash left it up.
-    dismiss_restore_bubble()
-    print(f"Phone remote: {qr_page.remote_url()}  (QR code at {qr_url})")
+    dismissRestoreBubble()
+    print(f"Phone remote: {qrPage.remoteUrl()}  (QR code at {QR_URL})")
 
 
 app = FastAPI(lifespan=lifespan)
@@ -205,19 +198,20 @@ app = FastAPI(lifespan=lifespan)
 # Anything unexpected becomes one log line and a short message for the phone,
 # never a crash or a wall of traceback.
 @app.exception_handler(Busy)
-async def _busy(request, exc):
+async def onBusy(request, exc):
     return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 
 @app.exception_handler(PageUnresponsive)
-async def _unresponsive(request, exc):
+async def onUnresponsive(request, exc):
     return JSONResponse(status_code=504, content={"detail": str(exc)})
 
 
 @app.exception_handler(Exception)
-async def _unexpected(request, exc):
+async def onUnexpected(request, exc):
     print(f"Error on {request.method} {request.url.path}: {type(exc).__name__}: {exc}")
     return JSONResponse(status_code=500, content={"detail": "Something went wrong. Try again."})
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -228,148 +222,150 @@ app.add_middleware(
 )
 
 
-def _web_app(name):
-    remote = web_apps.get(name or "youtube")
+def webApp(name):
+    remote = webApps.get(name or "youtube")
     if remote is None:
         raise HTTPException(status_code=400, detail=f"Unknown app '{name}'")
     return remote
 
 
+def firstLine(error, fallback="Chrome error"):
+    return (str(error).splitlines() or [fallback])[0]
+
+
+# ---------------------------------------------------------------------- status
+
+
 @app.get("/")
 def health():
-    return {"status": "ok", "message": "Remote API is running", "apps": ["laptop", *web_apps]}
+    return {"status": "ok", "message": "Remote API is running", "apps": ["laptop", *webApps]}
 
 
-FRONTEND_CHECK_URL = f"http://127.0.0.1:{qr_page.FRONTEND_PORT}/"
-_frontend = {"ready": False, "at": 0.0}
-_frontend_lock = threading.Lock()
+frontendCheck = {"ready": False, "at": 0.0}
+frontendLock = threading.Lock()
 
 
 @app.get("/frontend")
-def frontend_status():
+def frontendStatus():
     """Whether the phone page is up and serving (not stopped, building or
     still starting). The Home screen shows its QR code only once it is."""
-    with _frontend_lock:
-        if time.time() - _frontend["at"] > 1.5:
+    with frontendLock:
+        if time.time() - frontendCheck["at"] > 1.5:
             try:
-                with urllib.request.urlopen(FRONTEND_CHECK_URL, timeout=2) as r:
-                    _frontend["ready"] = r.status == 200
+                with urllib.request.urlopen(FRONTEND_CHECK_URL, timeout=2) as response:
+                    frontendCheck["ready"] = response.status == 200
             except Exception:
-                _frontend["ready"] = False
-            _frontend["at"] = time.time()
-        return {"ready": _frontend["ready"]}
+                frontendCheck["ready"] = False
+            frontendCheck["at"] = time.time()
+        return {"ready": frontendCheck["ready"]}
 
 
 @app.get("/qr", response_class=HTMLResponse)
 def qr(mode: str = ""):
     """QR code for the phone remote's URL, in the selected theme. The page
     polls /mode and follows theme changes without reloading."""
-    mode = mode if mode in MODES else MODE_STATE["mode"]
-    return qr_page.render(mode, wallpapers.current(mode))
+    mode = mode if mode in MODES else modeState["mode"]
+    return qrPage.render(mode, wallpapers.current(mode))
 
 
 # One status check per app at a time. The phone asks every second; if a page
 # is slow, extra requests get the last answer straight away instead of
 # piling up behind it (which used to freeze everything, then burst).
-_state_locks = {}
-_last_state = {}
+stateLocks = {}
+lastState = {}
 
 
-def _with_skips(state, app):
+def withSkips(state, app):
     """Add the app's recent auto-skip events, for the phone's notice."""
     return {**state, "skips": skipper.events(app)}
 
 
+def staleState(app):
+    cached = lastState.get(app)
+    return withSkips({**cached, "stale": True} if cached else {"app": app, "browser": "busy"}, app)
+
+
 @app.get("/state")
-def get_state(app: str = "youtube"):
-    remote = _web_app(app)
-    lock = _state_locks.setdefault(app, threading.Lock())
+def getState(app: str = "youtube"):
+    remote = webApp(app)
+    lock = stateLocks.setdefault(app, threading.Lock())
     if not lock.acquire(blocking=False):
-        cached = _last_state.get(app)
-        return _with_skips({**cached, "stale": True} if cached else {"app": app, "browser": "busy"}, app)
+        return staleState(app)
     try:
         state = remote.state()
     except Busy:
-        cached = _last_state.get(app)
-        return _with_skips({**cached, "stale": True} if cached else {"app": app, "browser": "busy"}, app)
+        return staleState(app)
     except PageUnresponsive as e:
         state = {"app": app, "browser": "error", "error": str(e)}
     finally:
         lock.release()
-    _last_state[app] = state
-    state = _with_skips(state, app)
-    player = (state or {}).get("player") or {}
-    title = player.get("title")
-    if isinstance(title, str) and title.strip() and app == MODE_STATE.get("lastApp"):
-        _remember_title(title)
-    return state
+    lastState[app] = state
+    if app == modeState.get("lastApp"):
+        rememberTitle(state)
+    return withSkips(state, app)
 
 
 @app.get("/screenshot")
 def screenshot(app: str = "youtube"):
-    png = _web_app(app).screenshot()
+    png = webApp(app).screenshot()
     if png is None:
         raise HTTPException(status_code=409, detail="Browser is not running")
     return Response(content=png, media_type="image/png", headers={"Cache-Control": "no-store"})
 
 
-def _mode_state():
+# ---------------------------------------------------------------------- mode / power
+
+
+def currentMode():
     tv = False
     try:
         with session.locked(timeout=2):
             if session.connect(launch=False):
-                tv = session.tv_mode
+                tv = session.tvMode
     except Exception:
         pass  # Chrome busy or gone: power/theme are still right.
-    paper = wallpapers.current(MODE_STATE["mode"]) or {}
-    if not MODE_STATE.get("nowPlaying"):
-        cached = _last_state.get(MODE_STATE.get("lastApp") or "") or {}
-        title = ((cached.get("player") or {}).get("title") or "")
-        if isinstance(title, str) and title.strip():
-            _remember_title(title)
-    return {**MODE_STATE, "tvMode": tv, "wallpaper": {k: paper.get(k) for k in ("id", "title", "video", "poster")}}
+    if not modeState.get("nowPlaying"):
+        rememberTitle(lastState.get(modeState.get("lastApp") or ""))
+    paper = wallpapers.current(modeState["mode"]) or {}
+    return {**modeState, "tvMode": tv, "wallpaper": {k: paper.get(k) for k in ("id", "title", "video", "poster")}}
 
 
-def _remember_title(title):
-    """Keep the last playing title next to last_app.txt so a restart still shows it."""
-    title = " ".join((title or "").split())
-    if not title or title == MODE_STATE.get("nowPlaying"):
+def rememberTitle(state):
+    """Keep the title playing in a state snapshot in lastTitle.txt, so a
+    restart still shows it."""
+    title = ((state or {}).get("player") or {}).get("title")
+    title = " ".join(title.split()) if isinstance(title, str) else ""
+    if not title or title == modeState.get("nowPlaying"):
         return
-    MODE_STATE["nowPlaying"] = title
-    try:
-        LAST_TITLE_FILE.write_text(title, encoding="utf-8")
-    except OSError:
-        pass
+    modeState["nowPlaying"] = title
+    writeText(LAST_TITLE_FILE, title)
 
 
-def _remember_app(name):
-    if name not in APPS or MODE_STATE["lastApp"] == name:
+def rememberApp(name):
+    if name not in APPS or modeState["lastApp"] == name:
         return
-    MODE_STATE["lastApp"] = name
-    MODE_STATE["nowPlaying"] = None
-    try:
-        LAST_APP_FILE.write_text(name, encoding="utf-8")
-        LAST_TITLE_FILE.write_text("", encoding="utf-8")
-    except OSError:
-        pass
+    modeState["lastApp"] = name
+    modeState["nowPlaying"] = None
+    writeText(LAST_APP_FILE, name)
+    writeText(LAST_TITLE_FILE, "")
 
 
-def _ensure_fullscreen():
+def ensureFullscreen():
     """Fullscreen the Chrome window unless it already is."""
     with session.locked(timeout=15):
         if not session.connect(launch=False):
             return
         try:
-            session.ensure_tv_mode()
+            session.ensureTvMode()
         except Exception as e:
             print(f"fullscreen failed: {e}")
 
 
-def _show_web_app(name):
+def showWebApp(name):
     """Bring one web app's tab to the front. If the tab is parked, it first
     goes back to the page it was parked from, so the app reopens where it was
     left. (land() is cheap when nothing was saved for that app.)"""
-    remote = _web_app(name)
+    remote = webApp(name)
     try:
         park.land(name)  # un-park before switching, so the tab is found by site
     except Exception as e:
@@ -379,47 +375,123 @@ def _show_web_app(name):
     return state
 
 
-def _resume_last_app():
+def showAndParkOthers(name):
+    """Show one web app, then free the other tabs' memory in the background
+    (the phone doesn't wait for that part)."""
+    state = showWebApp(name)
+    threading.Thread(target=park.parkAll, args=(name,), daemon=True).start()
+    return state
+
+
+def resumeLastApp():
     """Power on: Chrome leaves the Home screen for the last app's tab, back
     on whatever that app was showing when the remote was switched off."""
     try:
-        _show_web_app(MODE_STATE["lastApp"])
+        showWebApp(modeState["lastApp"])
     except Exception as e:
-        print(f"open {MODE_STATE['lastApp']} failed: {e}")
-    _ensure_fullscreen()
+        print(f"open {modeState['lastApp']} failed: {e}")
+    ensureFullscreen()
     laptop.settle()
 
 
+def switchToQr():
+    """Activate the QR tab (opening it if needed) and bring Chrome forward."""
+    with session.locked(timeout=15):
+        if not session.connect(launch=False):
+            return
+        try:
+            session.useTab((QR_MARKER,), QR_URL)
+            # Reload so the screen always has the latest QR page (it may have
+            # been open since before an update).
+            session.driver.refresh()
+            session.bringToFront()
+            session.ensureTvMode()
+        except Exception as e:
+            print(f"switch to QR failed: {e}")
+    laptop.settle()
+
+
+def powerOff():
+    park.parkAll()
+    switchToQr()
+
+
 @app.get("/mode")
-def get_mode():
+def getMode():
     """Power state, QR theme, and whether Chrome is fullscreen."""
-    return _mode_state()
+    return currentMode()
 
 
 @app.post("/mode")
-async def set_mode(request: Request):
+async def setMode(request: Request):
     """Change the QR page theme only. Doesn't touch playback or tabs; the QR
     page picks the new theme up by itself."""
+    noteActivity()
     data = await request.json()
     mode = (data.get("mode") or "night").lower()
     if mode not in MODES:
         raise HTTPException(status_code=400, detail=f"Unknown mode '{mode}'")
-    MODE_STATE["mode"] = mode
-    try:
-        THEME_FILE.write_text(mode, encoding="utf-8")
-    except OSError:
-        pass
-    return await asyncio.to_thread(_mode_state)
+    modeState["mode"] = mode
+    writeText(THEME_FILE, mode)
+    return await asyncio.to_thread(currentMode)
+
+
+def applyPower(on):
+    """The power button's work, shared by the phone and the sleep watch."""
+    modeState["power"] = "on" if on else "off"
+    writeText(POWER_FILE, modeState["power"])
+    if on:
+        resumeLastApp()
+    else:
+        powerOff()
+
+
+@app.post("/power")
+async def setPower(request: Request):
+    """Power off: park every app tab (playback ends, memory is freed, the
+    place is remembered) and switch Chrome to the QR page. Power on: Chrome
+    opens the last app's tab (modeState["lastApp"]) back on its saved page,
+    and every phone shows that app's remote. Either way, Chrome goes
+    fullscreen if it isn't. (The sleep watch runs this same switch after a
+    quiet while with nothing playing.)"""
+    noteActivity()
+    data = await request.json()
+    on = bool(data.get("on"))
+    # These drive Chrome (blocking), so keep them off the event loop.
+    await asyncio.to_thread(applyPower, on)
+    return await asyncio.to_thread(currentMode)
+
+
+@app.post("/tv")
+def toggleTv():
+    """Toggle Chrome fullscreen without switching tabs (for the QR page)."""
+    noteActivity()
+    with session.locked(timeout=15):
+        if not session.connect(launch=False):
+            raise HTTPException(status_code=409, detail="Chrome isn't running")
+        session.toggleTvMode()
+    return currentMode()
+
+
+@app.post("/qr/reload")
+async def reloadQr():
+    """Reload the Home screen (QR) tab. Used from the power-off screen."""
+    noteActivity()
+    await asyncio.to_thread(switchToQr)
+    return {"status": "success"}
+
+
+# ---------------------------------------------------------------------- wallpapers
 
 
 @app.get("/wallpapers")
-def get_wallpapers():
+def getWallpapers():
     """The wallpaper collection and which one each mode uses."""
     return wallpapers.listing()
 
 
 @app.post("/wallpapers")
-async def add_wallpaper(request: Request):
+async def addWallpaper(request: Request):
     """Add a wallpaper from a wallspace.app page (or a direct .mp4 link) and
     use it for Live. Only the video link is saved; it's streamed, not
     downloaded."""
@@ -431,7 +503,7 @@ async def add_wallpaper(request: Request):
 
 
 @app.post("/wallpapers/select")
-async def select_wallpaper(request: Request):
+async def selectWallpaper(request: Request):
     data = await request.json()
     try:
         return wallpapers.select(data.get("id"), data.get("mode") or "live")
@@ -439,175 +511,88 @@ async def select_wallpaper(request: Request):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.delete("/wallpapers/{item_id}")
-def delete_wallpaper(item_id: str):
+@app.delete("/wallpapers/{itemId}")
+def deleteWallpaper(itemId: str):
     try:
-        return wallpapers.remove(item_id)
+        return wallpapers.remove(itemId)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.post("/power")
-async def set_power(request: Request):
-    """Power off: park every app tab (playback ends, memory is freed, the
-    place is remembered) and switch Chrome to the QR page. Power on: Chrome
-    opens the last app's tab (MODE_STATE["lastApp"]) back on its saved page,
-    and every phone shows that app's remote. Either way, Chrome goes
-    fullscreen if it isn't."""
-    data = await request.json()
-    on = bool(data.get("on"))
-    MODE_STATE["power"] = "on" if on else "off"
-    _save_power(MODE_STATE["power"])
-    if on:
-        await asyncio.to_thread(_resume_last_app)
-    else:
-        # These drive Chrome (blocking), so keep them off the event loop.
-        await asyncio.to_thread(park.park_all)
-        await asyncio.to_thread(_switch_to_qr)
-    return await asyncio.to_thread(_mode_state)
-
-
-@app.post("/tv")
-def toggle_tv():
-    """Toggle Chrome fullscreen without switching tabs (for the QR page)."""
-    with session.locked(timeout=15):
-        if not session.connect(launch=False):
-            raise HTTPException(status_code=409, detail="Chrome isn't running")
-        session.toggle_tv_mode()
-    return _mode_state()
-
-
-@app.post("/pause-all")
-def pause_all():
-    """Pause every streaming tab (no tab switching)."""
-    _pause_all_playback()
-    return {"status": "success"}
-
-
-def _pause_all_playback():
-    """Pause every streaming tab simultaneously."""
-    with session.locked(timeout=15):
-        if not session.connect(launch=False):
-            return
-        for name, remote in web_apps.items():
-            try:
-                remote.pause_playback()
-            except Exception as e:
-                print(f"pause {name} failed: {e}")
-
-
-def _switch_to_qr():
-    """Activate the QR tab (opening it if needed) and bring Chrome forward."""
-    with session.locked(timeout=15):
-        if not session.connect(launch=False):
-            return
-        qr_url = f"http://127.0.0.1:{PORT}/qr"
-        try:
-            session.use_tab((f":{PORT}/qr",), qr_url)
-            # Reload so the screen always has the latest QR page (it may have
-            # been open since before an update).
-            session.driver.refresh()
-            session.bring_to_front()
-            session.ensure_tv_mode()
-        except Exception as e:
-            print(f"switch to QR failed: {e}")
-    laptop.settle()
-
-
-@app.post("/qr/reload")
-async def reload_qr():
-    """Reload the Home screen (QR) tab. Used from the power-off screen."""
-    await asyncio.to_thread(_switch_to_qr)
-    return {"status": "success"}
+# ---------------------------------------------------------------------- apps and actions
 
 
 @app.post("/app")
-async def switch_app(request: Request):
+async def switchApp(request: Request):
     """Called when you pick an app on the phone: Chrome switches to (or opens)
     that app's tab, back on whatever page it was left on, and comes to the
     front. Every other app tab is then parked — ended, with its place
     remembered — so only the showing tab costs memory. Laptop needs nothing,
     and leaving a stream playing while you use the laptop remote is
     intentional."""
+    noteActivity()
     data = await request.json()
     name = data.get("app")
     print(f"Switch app: {name}")
     if name == "laptop":
         return {"status": "success", "app": name}
-    _remember_app(name)
+    rememberApp(name)
     try:
         # show() drives Chrome (seconds); run it off the event loop so the
         # rest of the API keeps answering meanwhile.
-        state = await asyncio.to_thread(_show_web_app, name)
-        # Free the other tabs' memory once the switch is done; the phone
-        # doesn't wait for that part.
-        threading.Thread(target=park.park_all, args=(name,), daemon=True).start()
+        state = await asyncio.to_thread(showAndParkOthers, name)
         return {"status": "success", "app": name, "state": state}
     except WebDriverException as e:
-        raise HTTPException(status_code=500, detail=str(e).splitlines()[0])
+        raise HTTPException(status_code=500, detail=firstLine(e))
     finally:
         laptop.settle()
 
 
-@app.post("/launch")
-def launch(app: str = "youtube"):
-    try:
-        try:
-            state = _show_web_app(app)
-            threading.Thread(target=park.park_all, args=(app,), daemon=True).start()
-        except WebDriverException as e:
-            raise HTTPException(status_code=500, detail=str(e).splitlines()[0])
-        return {"status": "success", "state": state}
-    finally:
-        laptop.settle()
-
-
-# Sync work runs in FastAPI's threadpool; ChromeSession serialises access to
-# the single WebDriver session with a lock, LaptopControl does the same for
+# Sync work runs in a worker thread; ChromeSession serialises access to the
+# single WebDriver session with a lock, LaptopControl does the same for
 # pyautogui.
 @app.post("/action")
-async def button_action(request: Request):
+async def buttonAction(request: Request):
+    noteActivity()
     data = await request.json()
     print(f"Received action request: {data}")
     name = data.get("app") or "youtube"
     if name == "laptop":
-        return await asyncio.to_thread(_run_laptop, data.get("action"), data.get("value"))
-    return await asyncio.to_thread(_run_web, name, data.get("action"), data.get("value"))
+        return await asyncio.to_thread(runLaptop, data.get("action"), data.get("value"))
+    return await asyncio.to_thread(runWeb, name, data.get("action"), data.get("value"))
 
 
 @app.post("/search")
-async def search_query(request: Request):
+async def searchQuery(request: Request):
+    noteActivity()
     data = await request.json()
     print(f"Received search request: {data}")
-    return await asyncio.to_thread(_run_web, data.get("app") or "youtube", "search", data.get("query"))
+    return await asyncio.to_thread(runWeb, data.get("app") or "youtube", "search", data.get("query"))
 
 
-def _run_web(name, action, value=None):
-    remote = _web_app(name)
+def runWeb(name, action, value=None):
+    remote = webApp(name)
     try:
-        try:
-            # Another phone may have parked this app while its panel was
-            # open; land it back on its page before acting on it.
-            park.land(name)
-            out = remote.run(action, value)
-            if isinstance(out.get("state"), dict):
-                out["state"] = _with_skips(out["state"], name)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-        except Busy as e:
-            raise HTTPException(status_code=503, detail=str(e))
-        except PageUnresponsive as e:
-            raise HTTPException(status_code=504, detail=str(e))
-        except (WebDriverException, RuntimeError) as e:
-            raise HTTPException(status_code=502, detail=(str(e).splitlines() or ["Chrome error"])[0])
+        # Another phone may have parked this app while its panel was
+        # open; land it back on its page before acting on it.
+        park.land(name)
+        out = remote.run(action, value)
+        if isinstance(out.get("state"), dict):
+            out["state"] = withSkips(out["state"], name)
         return {"status": "success", "app": name, "action": action, **out}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except (Busy, PageUnresponsive):
+        raise  # answered by their exception handlers (503 / 504)
+    except (WebDriverException, RuntimeError) as e:
+        raise HTTPException(status_code=502, detail=firstLine(e))
     finally:
         # Clicks land the real pointer on the video. Move it off once the
         # action is done, unless the laptop trackpad is in use.
         laptop.settle()
 
 
-def _run_laptop(action, value=None):
+def runLaptop(action, value=None):
     try:
         out = laptop.run(action, value)
     except (ValueError, RuntimeError) as e:
@@ -616,22 +601,24 @@ def _run_laptop(action, value=None):
 
 
 @app.websocket("/ws/pointer")
-async def pointer_socket(ws: WebSocket):
+async def pointerSocket(ws: WebSocket):
     """Trackpad stream: {"t":"m",dx,dy} move, {"t":"s",dy} scroll,
     {"t":"c",b,double} click, {"t":"d",on} drag (hold left button)."""
     await ws.accept()
     try:
         while True:
             msg = json.loads(await ws.receive_text())
-            await asyncio.to_thread(laptop.handle_pointer, msg)
+            noteActivity()
+            await asyncio.to_thread(laptop.handlePointer, msg)
     except WebSocketDisconnect:
         pass
     finally:
         # Never leave the left button stuck down if the phone drops off.
         if laptop.dragging:
-            await asyncio.to_thread(laptop.set_drag, False)
+            await asyncio.to_thread(laptop.setDrag, False)
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("app:app", host=HOST, port=PORT, reload=RELOAD)

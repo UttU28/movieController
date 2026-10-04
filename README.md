@@ -188,11 +188,21 @@ The **TV** button on every app page toggles the whole Chrome window between
 fullscreen and maximized. It reads the window's real state each time, so it
 always gets you back out, even after the backend restarted.
 
+## Sleep mode
+
+If **nothing happens for 10 minutes** — no button from any phone and nothing
+playing in any tab (a paused video or a browse page counts as nothing
+happening) — the remote powers off by itself, exactly like the power button:
+the app tabs are parked and Chrome goes back to the Home (QR) screen. A
+video that's playing keeps it awake, so falling asleep mid-film is fine;
+the clock only starts once things actually go quiet. `IDLE_SLEEP=false` in
+`.env` turns this off; `IDLE_SLEEP_MINUTES` changes the wait.
+
 ## API
 
 - `GET /state?app=youtube|prime|netflix|jellyfin` returns the page type, highlighted item (`focus`), title/seasons/episodes (Prime `detail`), player info, and whether Chrome is running / showing that app
 - `POST /app {"app": "laptop|youtube|prime|netflix|jellyfin"}` switches Chrome to that app's tab and brings it forward
-- `POST /action {"app": "...", "action": "...", "value": ...}` runs an action (see `_do_*` in `youtube_remote.py` / `prime_remote.py` / `netflix_remote.py` / `jellyfin_remote.py`, and `LaptopControl.run` in `laptop.py`)
+- `POST /action {"app": "...", "action": "...", "value": ...}` runs an action (action `playPause` runs `_doPlayPause` in `youtubeRemote.py` / `primeRemote.py` / `netflixRemote.py` / `vikiRemote.py` / `jellyfinRemote.py`; laptop actions are in `LaptopControl.run` in `laptop.py`)
 - `POST /search {"app": "youtube|prime|netflix|jellyfin", "query": "..."}`
 - `WS /ws/pointer` trackpad stream: `{"t":"m",dx,dy}`, `{"t":"s",dy}`, `{"t":"c",b,double}`, `{"t":"d",on}`
 - `GET /screenshot?app=...` returns a PNG of that app's tab (this activates the tab)

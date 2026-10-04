@@ -547,13 +547,6 @@
       return Math.round(v.currentTime);
     },
 
-    pause() {
-      const v = video();
-      if (!v || v.paused) return false;
-      v.pause();
-      return true;
-    },
-
     mute() {
       const v = video();
       if (!v) return null;

@@ -1,7 +1,9 @@
+certifi
 fastapi
 pyautogui
-segno
 python-dotenv
+segno
 selenium>=4.20
 uvicorn
+websocket-client
 websockets
