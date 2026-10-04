@@ -2,6 +2,7 @@
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowRightToBracket } from "@fortawesome/free-solid-svg-icons";
+import { isDev } from "../lib/devMode";
 
 // Whether a web app's remote can be used, and the card to show when it can't:
 // backend down, Chrome closed, or Chrome showing another app's tab.
@@ -10,6 +11,13 @@ export function isReady(connected, state) {
 }
 
 export default function ChromeStatus({ connected, state, appName, onShow }) {
+  if (isDev()) {
+    return (
+      <section className="card empty">
+        <p>Developer mode — a preview of {appName}. Buttons buzz but nothing reaches the backend.</p>
+      </section>
+    );
+  }
   let message = "Chrome isn't running yet.";
   if (!connected) message = "Can't reach the backend. Is it running on port 9282?";
   else if (state?.pageType === "otherTab") message = `Chrome is showing another tab, not ${appName}.`;

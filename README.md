@@ -188,6 +188,16 @@ The **TV** button on every app page toggles the whole Chrome window between
 fullscreen and maximized. It reads the window's real state each time, so it
 always gets you back out, even after the backend restarted.
 
+## Sleep mode
+
+If **nothing happens for 10 minutes** — no button from any phone and nothing
+playing in any tab (a paused video or a browse page counts as nothing
+happening) — the remote powers off by itself, exactly like the power button:
+the app tabs are parked and Chrome goes back to the Home (QR) screen. A
+video that's playing keeps it awake, so falling asleep mid-film is fine;
+the clock only starts once things actually go quiet. `IDLE_SLEEP=false` in
+`.env` turns this off; `IDLE_SLEEP_MINUTES` changes the wait.
+
 ## API
 
 - `GET /state?app=youtube|prime|netflix|jellyfin` returns the page type, highlighted item (`focus`), title/seasons/episodes (Prime `detail`), player info, and whether Chrome is running / showing that app

@@ -25,6 +25,7 @@ from jellyfinRemote import JellyfinRemote
 from laptop import LaptopControl
 from netflixRemote import NetflixRemote
 from primeRemote import PrimeRemote
+from sleepWatch import SleepWatch
 from tabKeeper import TabKeeper
 from tabPark import TabPark
 from vikiRemote import VikiRemote
@@ -40,6 +41,8 @@ PORT = int(os.getenv("PORT", "9282"))
 RELOAD = envFlag("RELOAD", "false")
 LAUNCH_ON_START = envFlag("LAUNCH_ON_START", "true")
 AUTO_SKIP = envFlag("AUTO_SKIP", "true")
+IDLE_SLEEP = envFlag("IDLE_SLEEP", "true")
+IDLE_SLEEP_MINUTES = float(os.getenv("IDLE_SLEEP_MINUTES", "10") or 10)
 CORS_ORIGINS = [origin.strip() for origin in os.getenv("CORS_ORIGINS", "*").split(",") if origin.strip()]
 
 QR_URL = f"http://127.0.0.1:{PORT}/qr"
@@ -103,9 +106,20 @@ park = TabPark(session, keeper)
 warden = CursorWarden(session, keeper)
 # Clicks Skip (ads, intros, recaps...) as soon as a site offers it.
 skipper = AutoSkip(session, keeper, enabled=AUTO_SKIP)
-beats = (keeper, warden, skipper)
+# Powers the remote off after IDLE_SLEEP_MINUTES with nothing playing and
+# no command from any phone (see sleepWatch.py).
+lastActivity = {"at": time.time()}
+sleeper = SleepWatch(session, lastActivity, modeState, lambda: applyPower(False),
+                    minutes=IDLE_SLEEP_MINUTES, enabled=IDLE_SLEEP)
+beats = (keeper, warden, skipper, sleeper)
 
 stopBubbleWatch = threading.Event()
+
+
+def noteActivity():
+    """Called by every command the phone sends. The status polls are not
+    activity: the phone polls all the time, that's not you using it."""
+    lastActivity["at"] = time.time()
 
 
 def watchRestoreBubble():
@@ -412,6 +426,7 @@ def getMode():
 async def setMode(request: Request):
     """Change the QR page theme only. Doesn't touch playback or tabs; the QR
     page picks the new theme up by itself."""
+    noteActivity()
     data = await request.json()
     mode = (data.get("mode") or "night").lower()
     if mode not in MODES:
@@ -421,25 +436,36 @@ async def setMode(request: Request):
     return await asyncio.to_thread(currentMode)
 
 
+def applyPower(on):
+    """The power button's work, shared by the phone and the sleep watch."""
+    modeState["power"] = "on" if on else "off"
+    writeText(POWER_FILE, modeState["power"])
+    if on:
+        resumeLastApp()
+    else:
+        powerOff()
+
+
 @app.post("/power")
 async def setPower(request: Request):
     """Power off: park every app tab (playback ends, memory is freed, the
     place is remembered) and switch Chrome to the QR page. Power on: Chrome
     opens the last app's tab (modeState["lastApp"]) back on its saved page,
     and every phone shows that app's remote. Either way, Chrome goes
-    fullscreen if it isn't."""
+    fullscreen if it isn't. (The sleep watch runs this same switch after a
+    quiet while with nothing playing.)"""
+    noteActivity()
     data = await request.json()
     on = bool(data.get("on"))
-    modeState["power"] = "on" if on else "off"
-    writeText(POWER_FILE, modeState["power"])
     # These drive Chrome (blocking), so keep them off the event loop.
-    await asyncio.to_thread(resumeLastApp if on else powerOff)
+    await asyncio.to_thread(applyPower, on)
     return await asyncio.to_thread(currentMode)
 
 
 @app.post("/tv")
 def toggleTv():
     """Toggle Chrome fullscreen without switching tabs (for the QR page)."""
+    noteActivity()
     with session.locked(timeout=15):
         if not session.connect(launch=False):
             raise HTTPException(status_code=409, detail="Chrome isn't running")
@@ -450,6 +476,7 @@ def toggleTv():
 @app.post("/qr/reload")
 async def reloadQr():
     """Reload the Home screen (QR) tab. Used from the power-off screen."""
+    noteActivity()
     await asyncio.to_thread(switchToQr)
     return {"status": "success"}
 
@@ -503,6 +530,7 @@ async def switchApp(request: Request):
     remembered — so only the showing tab costs memory. Laptop needs nothing,
     and leaving a stream playing while you use the laptop remote is
     intentional."""
+    noteActivity()
     data = await request.json()
     name = data.get("app")
     print(f"Switch app: {name}")
@@ -525,6 +553,7 @@ async def switchApp(request: Request):
 # pyautogui.
 @app.post("/action")
 async def buttonAction(request: Request):
+    noteActivity()
     data = await request.json()
     print(f"Received action request: {data}")
     name = data.get("app") or "youtube"
@@ -535,6 +564,7 @@ async def buttonAction(request: Request):
 
 @app.post("/search")
 async def searchQuery(request: Request):
+    noteActivity()
     data = await request.json()
     print(f"Received search request: {data}")
     return await asyncio.to_thread(runWeb, data.get("app") or "youtube", "search", data.get("query"))
@@ -578,6 +608,7 @@ async def pointerSocket(ws: WebSocket):
     try:
         while True:
             msg = json.loads(await ws.receive_text())
+            noteActivity()
             await asyncio.to_thread(laptop.handlePointer, msg)
     except WebSocketDisconnect:
         pass

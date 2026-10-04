@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { pointerSocketUrl } from "./api";
+import { isDev } from "./devMode";
 
 // WebSocket to the backend's /ws/pointer for low-latency trackpad input.
 // Reconnects on its own; messages sent while disconnected are dropped (a lost
@@ -16,6 +17,10 @@ export default function usePointerSocket() {
     let delay = 500;
 
     const connect = () => {
+      if (isDev()) {
+        setStatus("closed"); // developer mode: no socket to the backend
+        return;
+      }
       setStatus("connecting");
       const sock = new WebSocket(pointerSocketUrl());
       ws.current = sock;

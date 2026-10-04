@@ -31,7 +31,6 @@ import {
   faPaste,
   faPlay,
   faPlus,
-  faRepeat,
   faRightLeft,
   faRotate,
   faRotateLeft,
@@ -48,7 +47,7 @@ import usePointerSocket from "../lib/usePointerSocket";
 import useRemote from "../lib/useRemote";
 
 const SENS_KEY = "remote.trackpadSensitivity";
-const HOTKEYS = [
+export const HOTKEYS = [
   { action: "altTab", icon: faRightLeft, label: "Alt+Tab" },
   { action: "desktop", icon: faDesktop, label: "Win+D" },
   { action: "closeWindow", icon: faXmark, label: "Alt+F4" },
@@ -70,7 +69,7 @@ const HOTKEYS = [
   { action: "screenshot", icon: faCropSimple, label: "Snip" },
 ];
 
-const KEYS = [
+export const KEYS = [
   { value: "esc", label: "Esc" },
   { value: "up", icon: faArrowUp },
   { value: "backspace", icon: faDeleteLeft, label: "Back" },
@@ -102,7 +101,21 @@ export function TrackpadStatus({ status }) {
   );
 }
 
-function TextSend({ placeholder, button, buttonLabel, onSend, autoFocus = false, clearOnSend = true }) {
+// Just the status light, floated over the trackpad's top-right corner.
+export function TrackpadDot({ status }) {
+  const live = status === "open";
+  return (
+    <span
+      className={`conn-pill pad-dot ${live ? "ok" : "bad"}`}
+      title={live ? "Trackpad live" : "Trackpad reconnecting…"}
+      aria-label={live ? "Trackpad live" : "Trackpad reconnecting"}
+    >
+      <span className="dot" />
+    </span>
+  );
+}
+
+export function TextSend({ placeholder, button, buttonLabel, onSend, autoFocus = false, clearOnSend = true }) {
   const [text, setText] = useState("");
   return (
     <form
@@ -136,29 +149,34 @@ function TextSend({ placeholder, button, buttonLabel, onSend, autoFocus = false,
 // Laptop control. "full" is the complete page; "drawer" is the quick version
 // in the slide-up drawer: trackpad, keys, and the first two rows of shortcuts.
 // Mouse buttons and typing stay on the full page.
-const DRAWER_SHORTCUTS = 10;
+export const DRAWER_SHORTCUTS = 10;
 
-export default function LaptopPanel({ variant = "full", onStatus }) {
-  const full = variant === "full";
-  const { error, action } = useRemote("laptop", { poll: false });
-  const { status, send } = usePointerSocket();
+// Pointer speed, remembered on the phone (shared by the laptop page and the
+// simple remote's trackpad strip).
+export function useTrackpadSensitivity() {
   const [sensitivity, setSensitivity] = useState(1.6);
-  const [dragging, setDragging] = useState(false);
-  const [typing, setTyping] = useState(false);
-
   useEffect(() => {
     try {
       const saved = parseFloat(localStorage.getItem(SENS_KEY));
       if (saved > 0) setSensitivity(saved);
     } catch {}
   }, []);
-
-  const changeSensitivity = (value) => {
+  const change = (value) => {
     setSensitivity(value);
     try {
       localStorage.setItem(SENS_KEY, String(value));
     } catch {}
   };
+  return [sensitivity, change];
+}
+
+export default function LaptopPanel({ variant = "full", onStatus }) {
+  const full = variant === "full";
+  const { error, action } = useRemote("laptop", { poll: false });
+  const { status, send } = usePointerSocket();
+  const [sensitivity, changeSensitivity] = useTrackpadSensitivity();
+  const [dragging, setDragging] = useState(false);
+  const [typing, setTyping] = useState(false);
 
   const toggleDrag = () => {
     const next = !dragging;
@@ -198,7 +216,7 @@ export default function LaptopPanel({ variant = "full", onStatus }) {
         <>
         <div className="row five">
           <RemoteButton icon={faHandPointer} label="Left" onPress={() => send({ t: "c", b: "left" })} />
-          <RemoteButton icon={faRepeat} label="Double" onPress={() => send({ t: "c", b: "left", double: true })} />
+          <RemoteButton icon={faRotate} label="Reload" onPress={() => window.location.reload()} />
           <RemoteButton icon={faHandPointer} label="Right" onPress={() => send({ t: "c", b: "right" })} />
           <RemoteButton icon={faGripVertical} label={dragging ? "Release" : "Drag"} active={dragging} onPress={toggleDrag} />
           <RemoteButton icon={faKeyboard} label="Keyboard" active={typing} onPress={() => setTyping(!typing)} />

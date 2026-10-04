@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { sendAction } from "./api";
+import { isDev } from "./devMode";
 
 const UP = new Set(["AudioVolumeUp", "VolumeUp", "MediaVolumeUp"]);
 const DOWN = new Set(["AudioVolumeDown", "VolumeDown", "MediaVolumeDown"]);
@@ -25,6 +26,7 @@ export default function usePcVolumeKeys() {
     const bump = (dir) => {
       const now = Date.now();
       if (now - last.current < 90) return;
+      if (isDev()) return; // developer mode: the rocker stays local
       last.current = now;
       sendAction("laptop", dir === "up" ? "volumeUp" : "volumeDown").catch(() => {});
     };

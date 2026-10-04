@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { errorMessage, getState, sendAction, sendSearch, showApp } from "./api";
+import { isDev } from "./devMode";
 
 const POLL_MS = 1000;
 const MAX_PENDING = 3;
@@ -29,6 +30,8 @@ export default function useRemote(app, { poll = true } = {}) {
   }, []);
 
   const refresh = useCallback(async () => {
+    if (!app) return; // no app picked yet
+    if (isDev()) return; // developer mode: no backend traffic
     const id = ++seq.current;
     try {
       apply(id, await getState(app));
@@ -39,7 +42,7 @@ export default function useRemote(app, { poll = true } = {}) {
   }, [app, apply]);
 
   useEffect(() => {
-    if (!poll) return undefined;
+    if (!poll || !app) return undefined;
     refresh();
     const timer = setInterval(() => {
       if (document.visibilityState === "visible" && pending.current === 0) refresh();
@@ -52,6 +55,7 @@ export default function useRemote(app, { poll = true } = {}) {
   const run = useCallback(
     (fn, { droppable = false } = {}) => {
       if (droppable && pending.current >= MAX_PENDING) return Promise.resolve();
+      if (isDev()) return Promise.resolve(); // developer mode: presses are local no-ops
       pending.current += 1;
       const gen = generation.current;
       const job = queue.current.then(async () => {
