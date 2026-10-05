@@ -193,15 +193,15 @@ if ($Role -eq 'supervisor') {
 
   $fail = @{ backend = 0; frontend = 0 }
   $tick = [datetime]::UtcNow
-  $gitTick = 0          # counter for the 30s git-check cycle
+  $gitTick = 0          # counter for the 2-minute git-check cycle
   $needRestart = $false  # set true when git pull fetched changes
   try {
     while ($true) {
       Start-Sleep -Seconds 5
       $gitTick++
 
-      # Every 30 seconds (6 × 5s): fetch, then pull and restart if remote changed.
-      if ($gitTick -ge 6) {
+      # Every 2 minutes (24 × 5s): fetch, then pull and restart if remote changed.
+      if ($gitTick -ge 24) {
         $gitTick = 0
         try {
           Push-Location $Root
