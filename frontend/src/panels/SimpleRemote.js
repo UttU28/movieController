@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import {
+  faArrowLeft,
   faExpand,
   faForwardFast,
   faForwardStep,
   faGripVertical,
-  faHandPointer,
   faKeyboard,
   faListOl,
   faPaperPlane,
@@ -214,9 +214,14 @@ export default function SimpleRemote({ app, appName }) {
           <TrackpadDot status={status} />
         </div>
         <div className="row five">
-          <RemoteButton icon={faHandPointer} label="Left" onPress={() => send({ t: "c", b: "left" })} />
+          <RemoteButton icon={faArrowLeft} label="Back" onPress={() => action("back")} />
+          <RemoteButton
+            icon={faExpand}
+            label="Full"
+            active={app === "youtube" ? !!state?.fullscreen : !!player?.fullscreen}
+            onPress={() => action("fullscreen")}
+          />
           <RemoteButton icon={faRotate} label="Reload" onPress={() => window.location.reload()} />
-          <RemoteButton icon={faHandPointer} label="Right" onPress={() => send({ t: "c", b: "right" })} />
           <RemoteButton icon={faGripVertical} label={dragging ? "Release" : "Drag"} active={dragging} onPress={toggleDrag} />
           <RemoteButton icon={faKeyboard} label="Keyboard" active={keysOpen} onPress={() => setKeysOpen(!keysOpen)} />
         </div>
