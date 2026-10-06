@@ -14,6 +14,8 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  // Draw under the iPhone notch / home bar; the CSS pads with safe-area insets.
+  viewportFit: "cover",
   themeColor: "#0f0f0f",
 };
 

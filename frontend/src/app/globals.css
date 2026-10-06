@@ -2911,3 +2911,503 @@ html:has(.power-layout) body::-webkit-scrollbar {
   min-width: 0;
 }
 
+
+/* =====================================================================
+   Responsive: phones (portrait + landscape), tablets and desktop.
+   Phones keep the layout above. Tablets in portrait get a roomier single
+   column; anything landscape and wide enough (phone on its side, tablet,
+   desktop browser) gets a two-column remote: info + buttons on the left,
+   the swipe pad on the right, playback dock along the bottom. Desktop
+   shows that tablet layout, capped so it never sprawls.
+   ===================================================================== */
+
+/* Tiny phones (SE / 320px): tighten so five buttons and the dock fit. */
+@media (max-width: 359px) {
+  .remote {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .topbar,
+  .dock,
+  .media-layout > .dock {
+    margin-left: -12px;
+    margin-right: -12px;
+  }
+  .row {
+    gap: 7px;
+  }
+  .rbtn span {
+    font-size: 0.6rem;
+  }
+  .dock,
+  .media-layout > .dock {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .dock-btn {
+    width: 44px;
+    height: 44px;
+  }
+  .dock-btn.main {
+    width: 60px;
+    height: 60px;
+  }
+}
+
+/* Short phones (portrait, under ~700px tall): let the pad shrink further. */
+@media (orientation: portrait) and (max-height: 700px) {
+  .media-layout > .swipepad {
+    flex-basis: 140px;
+  }
+  .media-layout .swipepad-surface {
+    min-height: 110px;
+  }
+  .media-layout > .row .rbtn {
+    padding: 6px 0 5px;
+  }
+}
+
+/* ---------- Tablet portrait ---------- */
+@media (orientation: portrait) and (min-width: 600px) {
+  .remote {
+    max-width: 620px;
+    padding: 20px 24px 28px;
+    gap: 16px;
+  }
+  .topbar,
+  .dock,
+  .media-layout > .dock {
+    margin-left: -24px;
+    margin-right: -24px;
+  }
+  .power-slot.bottom,
+  .power-layout.themes-open > .row.four {
+    margin-left: -24px;
+    margin-right: -24px;
+  }
+  .media-layout {
+    gap: 14px;
+  }
+  .media-layout > .swipepad {
+    max-height: none;
+  }
+  .pad-ok {
+    width: 104px;
+    height: 104px;
+    font-size: 1.3rem;
+  }
+  .pad-arrow {
+    font-size: 1.6rem;
+  }
+  .row {
+    gap: 12px;
+  }
+  .rbtn,
+  .media-layout > .row .rbtn {
+    padding: 14px 0 11px;
+    gap: 7px;
+    font-size: 1.25rem;
+    border-radius: 16px;
+  }
+  .rbtn span {
+    font-size: 0.75rem;
+  }
+  .dock,
+  .media-layout > .dock {
+    justify-content: center;
+    gap: 28px;
+    padding: 16px 32px calc(20px + env(safe-area-inset-bottom));
+  }
+  .dock-btn {
+    width: 60px;
+    height: 60px;
+    font-size: 1.3rem;
+  }
+  .dock-btn.main {
+    width: 80px;
+    height: 80px;
+    font-size: 1.7rem;
+  }
+  .drawer {
+    max-width: 600px;
+  }
+  .laptop .pad-wrap,
+  .laptop-drawer .pad-wrap {
+    height: 260px;
+  }
+  .skip-notice {
+    top: calc(env(safe-area-inset-top, 0px) + 28px);
+  }
+}
+
+/* ---------- Landscape: phone on its side, tablet, desktop ---------- */
+@media (orientation: landscape) and (min-width: 560px) {
+  .remote {
+    max-width: 1040px;
+    padding: 16px 24px 28px;
+  }
+  .topbar,
+  .dock {
+    margin-left: -24px;
+    margin-right: -24px;
+  }
+
+  /* Two columns. Left: title card / status on top, button rows at the
+     bottom (near the thumbs and the dock). Right: the swipe pad, full
+     height. Dock: full width along the bottom.
+     Rows: 1 title, 2 error, 3 spacer, 4-6 buttons, 7 dock. */
+  .media-layout:not(:has(.library-scroll)) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto auto auto;
+    column-gap: 20px;
+    row-gap: 0;
+    align-items: start;
+  }
+  .media-layout:not(:has(.library-scroll)) > * {
+    grid-column: 1;
+    margin-bottom: 12px;
+  }
+  .media-layout:not(:has(.library-scroll)) > :is(.titlebar-wrap, .status-card) {
+    grid-row: 1;
+  }
+  .media-layout:not(:has(.library-scroll)) > .error {
+    grid-row: 2;
+  }
+  .media-layout:not(:has(.library-scroll)) > :nth-child(1 of .row, .mouse-strip) {
+    grid-row: 4;
+  }
+  .media-layout:not(:has(.library-scroll)) > :nth-child(2 of .row, .mouse-strip) {
+    grid-row: 5;
+  }
+  .media-layout:not(:has(.library-scroll)) > :nth-child(3 of .row, .mouse-strip) {
+    grid-row: 6;
+  }
+  .media-layout:not(:has(.library-scroll)) > .swipepad {
+    grid-column: 2;
+    grid-row: 1 / 7;
+    align-self: stretch;
+    max-height: none;
+    min-height: 0;
+  }
+  .media-layout:not(:has(.library-scroll)) > .dock {
+    grid-column: 1 / -1;
+    grid-row: 7;
+    margin: 0 -24px;
+  }
+  .media-layout > .row {
+    gap: 12px;
+  }
+  .media-layout > .row .rbtn {
+    padding: 14px 0 11px;
+    gap: 7px;
+    font-size: 1.2rem;
+    border-radius: 16px;
+  }
+  .media-layout > .row .rbtn span {
+    font-size: 0.72rem;
+  }
+  /* Simple remote: the mouse card fills the left column under the title. */
+  .media-layout:not(:has(.library-scroll)) > .laptop.mouse-strip {
+    grid-row: 3 / 7;
+    align-self: stretch;
+    min-height: 0;
+  }
+  .media-layout .mouse-strip .pad-wrap {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 150px;
+  }
+  .pad-ok {
+    width: 104px;
+    height: 104px;
+    font-size: 1.3rem;
+  }
+  .pad-arrow {
+    font-size: 1.6rem;
+  }
+  .pad-arrow.up {
+    top: 16px;
+  }
+  .pad-arrow.down {
+    bottom: 16px;
+  }
+  .pad-arrow.left {
+    left: 24px;
+  }
+  .pad-arrow.right {
+    right: 24px;
+  }
+  .dock,
+  .media-layout > .dock {
+    justify-content: center;
+    gap: 32px;
+  }
+  .dock-btn {
+    width: 58px;
+    height: 58px;
+    font-size: 1.25rem;
+  }
+  .dock-btn.main {
+    width: 76px;
+    height: 76px;
+    font-size: 1.6rem;
+  }
+  /* Results drop down over the pad too, so they get more room. */
+  .media-layout .results-sheet {
+    right: auto;
+    width: min(560px, calc(100vw - 48px));
+  }
+
+  /* Pages that stay a single column (power screen, library, laptop page)
+     use a comfortable reading width instead of the full remote width. */
+  .remote:has(.power-layout),
+  .remote:has(.laptop-full) {
+    max-width: 640px;
+  }
+  .media-layout:has(.library-scroll) {
+    max-width: 900px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  .drawer {
+    max-width: 640px;
+  }
+  .laptop-drawer .pad-wrap,
+  .laptop-full .pad-wrap {
+    height: 240px;
+  }
+  .skip-notice {
+    top: calc(env(safe-area-inset-top, 0px) + 24px);
+  }
+}
+
+/* Short landscape (phones on their side, small laptop windows): nothing
+   to spare vertically, so the dock moves under the pad in the right column
+   and everything gets compact. */
+@media (orientation: landscape) and (min-width: 560px) and (max-height: 620px) {
+  .remote {
+    padding: 10px 20px 0;
+    gap: 10px;
+  }
+  .media-layout:not(:has(.library-scroll)) > * {
+    margin-bottom: 8px;
+  }
+  /* Buttons drop one row so they line up with the dock's bottom edge. */
+  .media-layout:not(:has(.library-scroll)) > :nth-child(1 of .row, .mouse-strip) {
+    grid-row: 5;
+  }
+  .media-layout:not(:has(.library-scroll)) > :nth-child(2 of .row, .mouse-strip) {
+    grid-row: 6;
+  }
+  .media-layout:not(:has(.library-scroll)) > :nth-child(3 of .row, .mouse-strip) {
+    grid-row: 7;
+  }
+  .media-layout:not(:has(.library-scroll)) > .dock {
+    grid-column: 2;
+    grid-row: 7;
+    margin: 0 0 calc(8px + env(safe-area-inset-bottom));
+    padding: 8px 14px;
+    border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--line));
+    border-radius: 22px;
+    gap: 0;
+    justify-content: space-between;
+  }
+  .media-layout > .row {
+    gap: 8px;
+  }
+  .media-layout > .row .rbtn {
+    padding: 7px 0 6px;
+    gap: 4px;
+    font-size: 1rem;
+    border-radius: 13px;
+  }
+  .media-layout > .row .rbtn span {
+    font-size: 0.62rem;
+  }
+  .media-layout:not(:has(.library-scroll)) > .laptop.mouse-strip {
+    grid-row: 3 / 8;
+  }
+  .media-layout .mouse-strip .pad-wrap {
+    min-height: 100px;
+  }
+  .media-layout .titlebar .player-title,
+  .media-layout .titlebar .selected-title {
+    font-size: 0.95rem;
+  }
+  .pad-ok {
+    width: 76px;
+    height: 76px;
+    font-size: 1.05rem;
+  }
+  .dock-btn {
+    width: 44px;
+    height: 44px;
+    font-size: 1.05rem;
+  }
+  .dock-btn.main {
+    width: 56px;
+    height: 56px;
+    font-size: 1.3rem;
+  }
+  .media-layout .results-sheet {
+    max-height: calc(100dvh - 120px);
+  }
+  .drawer {
+    max-height: 94dvh;
+  }
+}
+
+/* Mouse / trackpad users (desktop browser): show what's clickable. */
+@media (hover: hover) and (pointer: fine) {
+  .rbtn:not(.accent):hover,
+  .pill-btn:not(.accent):not(.skip):hover,
+  .back-btn:hover {
+    background: var(--surface-2);
+  }
+  .dock-btn:not(.main):hover {
+    background: color-mix(in srgb, var(--text) 12%, transparent);
+  }
+  .dock-btn.main:hover,
+  .rbtn.accent:hover,
+  .pill-btn.accent:hover {
+    filter: brightness(1.1);
+  }
+  .swipepad-surface {
+    cursor: pointer;
+  }
+}
+
+/* ---------- Device quirks: iPhone, iPad, Android ---------- */
+
+/* iOS bumps text size up in landscape; keep it as designed. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+/* No "copy / look up" callout on long-press of controls (iOS). */
+button,
+.swipepad-surface,
+.trackpad {
+  -webkit-touch-callout: none;
+}
+
+/* Notch, Dynamic Island and home bar (viewport-fit=cover). In a normal
+   browser tab these are 0 in portrait; they matter in landscape on iPhone
+   (notch on one side) and when the page is added to the home screen. */
+.remote {
+  padding-top: max(14px, env(safe-area-inset-top));
+}
+@media (orientation: landscape) and (min-width: 560px) {
+  .remote {
+    padding-left: max(24px, env(safe-area-inset-left));
+    padding-right: max(24px, env(safe-area-inset-right));
+  }
+}
+.drawer-body {
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+}
+/* Older browsers without dynamic viewport units (iOS < 15.4, Android
+   Chrome < 108): fall back to the classic viewport height. */
+@supports not (height: 100dvh) {
+  .remote:has(.media-layout) {
+    height: 100vh;
+  }
+  .remote:has(.power-layout) {
+    min-height: 100vh;
+  }
+  .power-layout {
+    min-height: calc(100vh - 26px);
+  }
+  .drawer {
+    max-height: 86vh;
+  }
+}
+
+/* Very short landscape (small Android / iPhone SE on its side, ~360px
+   tall): trim the title card and pad so nothing gets cut off. */
+@media (orientation: landscape) and (min-width: 560px) and (max-height: 400px) {
+  .media-layout .titlebar {
+    padding: 8px 12px;
+  }
+  .media-layout > .row .rbtn {
+    padding: 5px 0 4px;
+    gap: 3px;
+  }
+  .media-layout > .row .rbtn span {
+    font-size: 0.58rem;
+  }
+  .pad-ok {
+    width: 64px;
+    height: 64px;
+  }
+  .pad-arrow.up {
+    top: 8px;
+  }
+  .pad-arrow.down {
+    bottom: 8px;
+  }
+  .dock-btn {
+    width: 40px;
+    height: 40px;
+  }
+  .dock-btn.main {
+    width: 50px;
+    height: 50px;
+  }
+}
+
+/* Power screen on a phone on its side: clock on the left; settings, tools
+   and Turn on on the right, so nothing needs scrolling. (The Home screen
+   editor keeps the single scrolling column.) */
+@media (orientation: landscape) and (min-width: 560px) and (max-height: 620px) {
+  .remote:has(.power-layout:not(.themes-open)) {
+    max-width: 960px;
+  }
+  .power-layout:not(.themes-open) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    column-gap: 24px;
+    row-gap: 10px;
+  }
+  .power-layout:not(.themes-open) > .power-slot:not(.bottom) {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .power-layout:not(.themes-open) > .power-scroll {
+    grid-column: 1;
+    grid-row: 2 / 5;
+    justify-content: center;
+  }
+  .power-layout:not(.themes-open) .power-hero {
+    padding: 0;
+  }
+  .power-layout:not(.themes-open) > .power-settings {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    align-self: end;
+  }
+  .power-layout:not(.themes-open) > .power-tools {
+    grid-column: 2;
+    grid-row: 3;
+  }
+  .power-layout:not(.themes-open) > .power-slot.bottom {
+    grid-column: 2;
+    grid-row: 4;
+    margin: 0;
+  }
+  .power-layout:not(.themes-open) .power-dock {
+    padding-top: 6px;
+    background: none;
+  }
+}
+
+/* Tall phones (Android 19.5:9 / 20:9, iPhone Pro Max): let the pad take the
+   spare height instead of leaving a gap above the dock. */
+@media (orientation: portrait) {
+  .media-layout > .swipepad {
+    max-height: none;
+  }
+}
