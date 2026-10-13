@@ -4,7 +4,7 @@
 // remote-control commands addressed to this very browser session.
 // Installs window.__jfr; guarded by VERSION.
 (() => {
-  const VERSION = 7;
+  const VERSION = 8;
   if (window.__jfr && window.__jfr.version === VERSION) return;
 
   const TICKS = 10000000; // Jellyfin times are in 100ns ticks.
@@ -301,11 +301,13 @@
     } else if (item.ProductionYear) {
       subtitle = String(item.ProductionYear);
     }
+    const v = document.querySelector('video');
+    const livePos = v && isFinite(v.currentTime) ? v.currentTime * TICKS : ps.PositionTicks || 0;
     return {
       id: item.Id,
       title: item.Type === 'Episode' ? (item.SeriesName || item.Name) : item.Name,
       subtitle,
-      currentTime: (ps.PositionTicks || 0) / TICKS,
+      currentTime: livePos / TICKS,
       duration: (item.RunTimeTicks || 0) / TICKS,
       paused: !!ps.IsPaused,
       volume: ps.VolumeLevel ?? 100,
@@ -503,18 +505,28 @@
       return cmd;
     },
 
+    // The session's PositionTicks only moves when the web client happens to
+    // report progress (every ~15s), so "now + 10s" often lands behind where
+    // the video really is and the forward seek looked ignored. The <video>
+    // knows where playback actually is; the session is only the fallback.
     async seekBy(seconds) {
+      const v = document.querySelector('video');
       const s = await mySession();
-      const pos = (s && s.PlayState && s.PlayState.PositionTicks) || 0;
-      const dur = (s && s.NowPlayingItem && s.NowPlayingItem.RunTimeTicks) || Infinity;
+      const pos = v && isFinite(v.currentTime)
+        ? v.currentTime * TICKS
+        : (s && s.PlayState && s.PlayState.PositionTicks) || 0;
+      const dur = (s && s.NowPlayingItem && s.NowPlayingItem.RunTimeTicks)
+        || (v && isFinite(v.duration) && v.duration > 0 ? v.duration * TICKS : Infinity);
       const target = Math.max(0, Math.min(dur - TICKS, pos + seconds * TICKS));
       await playstate('Seek', { SeekPositionTicks: Math.round(target) });
       return target / TICKS;
     },
 
     async seekTo(fraction) {
+      const v = document.querySelector('video');
       const s = await mySession();
-      const dur = s && s.NowPlayingItem && s.NowPlayingItem.RunTimeTicks;
+      const dur = (s && s.NowPlayingItem && s.NowPlayingItem.RunTimeTicks)
+        || (v && isFinite(v.duration) && v.duration > 0 ? v.duration * TICKS : 0);
       if (!dur) return false;
       await playstate('Seek', { SeekPositionTicks: Math.round(dur * Math.max(0, Math.min(0.999, fraction))) });
       return true;

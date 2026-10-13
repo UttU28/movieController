@@ -52,6 +52,25 @@ RESUME_AFTER = (3, 10)  # seconds after the skip: from, until
 FAILED_JS = "document.querySelector('[data-autoskip]')?.setAttribute('data-autoskip-failed', ''); true"
 CLICK_JS = "document.querySelector('[data-autoskip]')?.click(); true"
 
+# Fresh centre point for the marked button — or nothing to click at all.
+# A real click goes to viewport coordinates, not to an element, and sites
+# reposition or hide their Skip button between the search and the click:
+# Jellyfin drops its Skip Intro the instant the intro ends, and its Next
+# (next-episode) button sits exactly there, so a stale click started the
+# next episode on its own. This re-checks that the button is still under
+# its own centre before the pointer is pressed.
+POSITION_JS = """(() => {
+  const el = document.querySelector('[data-autoskip]');
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  if (r.width < 8 || r.height < 8 || r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) return null;
+  const x = Math.min(Math.max(r.left + r.width / 2, 1), innerWidth - 1);
+  const y = Math.min(Math.max(r.top + r.height / 2, 1), innerHeight - 1);
+  const hit = document.elementFromPoint(x, y);
+  if (!hit || (!el.contains(hit) && !hit.contains(el))) return null;
+  return { x, y };
+})()"""
+
 # Clicks per button before giving up on it, and the gap between them.
 MAX_TRIES = 3
 RETRY_SECONDS = 1.2
@@ -169,11 +188,19 @@ class AutoSkip(Beat):
                 print(f"Auto-skip on {app} failed: {e}")
             return
         if button.get("visible"):
+            # Never click blind at the coordinates saved a beat ago: ask the
+            # page for the button's point right now, and only send the real
+            # click while it still sits under its own centre.
             try:
-                self.session.clickInTab(tab, button["x"], button["y"], timeout=CLICK_TIMEOUT)
-                return
+                at = self.session.evalInTab(tab, POSITION_JS, timeout=2)
             except Exception:
-                pass
+                at = None
+            if at:
+                try:
+                    self.session.clickInTab(tab, at["x"], at["y"], timeout=CLICK_TIMEOUT)
+                    return
+                except Exception:
+                    pass
         try:
             self.session.evalInTab(tab, CLICK_JS, timeout=2)
         except Exception as e:

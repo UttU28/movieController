@@ -3,7 +3,7 @@
 // readers for seasons, episodes and the player. Re-sent on every call and
 // guarded by VERSION, so page reloads simply reinstall it.
 (() => {
-  const VERSION = 6;
+  const VERSION = 7;
   if (window.__nfr && window.__nfr.version === VERSION) return;
 
   const FOCUS_ATTR = 'data-nfr-focus';
@@ -411,10 +411,23 @@
       return true;
     },
 
+    // Take "now" from the video element: the player API's getCurrentTime
+    // freezes when the session id it picked has gone stale, which made
+    // every seek compute its target from an old position (forward lands
+    // where you already are, so it looks like only Back 10s works).
     seek(seconds) {
+      const v = video();
       const p = nfPlayer();
-      if (!p) return false;
-      p.seek(clamp(p.getCurrentTime() + seconds * 1000, 0, p.getDuration() - 1000));
+      if (!p && !v) return false;
+      const cur = v && isFinite(v.currentTime) ? v.currentTime * 1000 : p.getCurrentTime();
+      const dur = (v && isFinite(v.duration) && v.duration > 0 ? v.duration * 1000 : 0)
+        || (p ? p.getDuration() : 0);
+      const top = dur > 1000 ? dur - 1000 : 0;
+      const target = clamp(Math.round(cur + seconds * 1000), 0, Math.max(0, top));
+      // Both, at the same target: the API keeps Netflix's own state in sync,
+      // and the element seek still lands if the API's session has gone stale.
+      if (p) p.seek(target);
+      if (v && isFinite(v.duration)) v.currentTime = target / 1000;
       return true;
     },
 
