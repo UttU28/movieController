@@ -2,31 +2,43 @@
 # Double-click "Start Remote.bat". This window watches both servers.
 # It restarts them if they crash, stop answering, or the PC wakes from sleep.
 # Output is shown in each server window and saved under logs\.
-#
-# Updates (a new commit upstream) restart only the two servers: the remote's
-# Chrome stays open and keeps playing, and the backend re-attaches to it. The
-# phone page is built into a second folder while the old one keeps serving,
-# so it's only down for the few seconds the servers take to restart.
+# Every start is a session: logs\sessions\<when-it-started>\ holds that run's
+# backend.log / frontend.log / supervisor.log (crash-restarts and automatic
+# updates within one run keep writing to the same session files). The rolling
+# logs\<name>.log files still get everything too, so the newest run is always
+# easy to find. The 30 most recent sessions are kept.
 param(
   [ValidateSet('supervisor', 'backend', 'frontend')]
-  [string]$Role = 'supervisor'
+  [string]$Role = 'supervisor',
+  # The supervisor stamps every server window with its session; a window
+  # started on its own makes its own stamp.
+  [string]$Session = ''
 )
 
 $ErrorActionPreference = 'Continue'
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $LogDir = Join-Path $Root 'logs'
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+if (-not $Session) { $Session = Get-Date -Format 'yyyyMMdd-HHmmss' }
+$SessionDir = Join-Path (Join-Path $LogDir 'sessions') $Session
+New-Item -ItemType Directory -Force -Path $SessionDir | Out-Null
 
 function Write-Log([string]$File, [string]$Message) {
-  $path = Join-Path $LogDir $File
-  if ((Test-Path $path) -and ((Get-Item $path).Length -gt 5MB)) {
-    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-    Move-Item $path "$path.$stamp" -Force
-    Get-ChildItem "$path.*" | Sort-Object LastWriteTime -Descending | Select-Object -Skip 5 | Remove-Item -Force
-  }
   $line = '{0}  {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Message
-  Add-Content -Path $path -Value $line -Encoding utf8
+  foreach ($path in @((Join-Path $LogDir $File), (Join-Path $SessionDir $File))) {
+    if ((Test-Path $path) -and ((Get-Item $path).Length -gt 5MB)) {
+      $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+      Move-Item $path "$path.$stamp" -Force
+      Get-ChildItem "$path.*" | Sort-Object LastWriteTime -Descending | Select-Object -Skip 5 | Remove-Item -Force
+    }
+    Add-Content -Path $path -Value $line -Encoding utf8
+  }
   Write-Host $line
+}
+
+function Clear-OldSessions {
+  Get-ChildItem (Join-Path $LogDir 'sessions') -Directory -ErrorAction SilentlyContinue |
+    Sort-Object Name -Descending | Select-Object -Skip 30 | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 function Test-OurProcess($proc) {
@@ -89,7 +101,7 @@ function Clear-OurPort([int]$Port) {
 
 function Start-RoleWindow([string]$Name) {
   Start-Process -FilePath 'powershell.exe' -WorkingDirectory $Root -ArgumentList @(
-    '-NoExit', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, '-Role', $Name
+    '-NoExit', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, '-Role', $Name, '-Session', $Session
   ) | Out-Null
 }
 
@@ -180,9 +192,11 @@ if ($Role -eq 'supervisor') {
   Write-Host 'Backend   http://127.0.0.1:9282'
   Write-Host 'Frontend  http://127.0.0.1:9283'
   Write-Host "Logs      $LogDir"
+  Write-Host "Session   $SessionDir"
   Write-Host 'Close this window, then the two server windows, to stop.'
   Write-Host ''
-  Write-Log 'supervisor.log' 'Supervisor started'
+  Clear-OldSessions
+  Write-Log 'supervisor.log' "Supervisor started (session $Session)"
   Invoke-GitPull
 
   # Never run two copies of a server: close leftovers first.
@@ -298,7 +312,7 @@ if ($Role -eq 'supervisor') {
   } finally {
     Stop-Logged 'backend'
     Stop-Logged 'frontend'
-    Write-Log 'supervisor.log' 'Supervisor stopped'
+    Write-Log 'supervisor.log' "Supervisor stopped (session $Session)"
     $mutex.ReleaseMutex() | Out-Null
     $mutex.Dispose()
   }
